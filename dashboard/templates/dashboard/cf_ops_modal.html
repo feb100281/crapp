@@ -1,0 +1,59 @@
+{# Фрагмент для модалки: операции строки отчёта ДДС за период (htmx) #}
+<div class="pk-ops">
+    <div class="pk-ops-head">
+        <div class="pk-hero-kicker">Операции · {{ period }}</div>
+        <div class="pk-ops-title">{{ title }}</div>
+        <div class="pk-ops-sub">{{ scope }}</div>
+    </div>
+
+    <div class="pk-kpi-grid">
+        {% for k in kpis %}
+            <div class="pk-kpi-card">
+                <div class="pk-kpi-label">{{ k.label }}</div>
+                <div class="pk-kpi-value pk-kpi-{{ k.tone }}">{{ k.value }}</div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if rows %}
+        {% if limited %}
+            <div class="pk-mini-note">Показаны {{ limit }} крупнейших операций из {{ count }}.</div>
+        {% endif %}
+        <div class="pk-scroll pk-ops-scroll">
+            <table class="pk-mini-table">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Счёт</th>
+                        <th>Тип</th>
+                        <th>Статья</th>
+                        <th>Контрагент</th>
+                        <th>Назначение платежа</th>
+                        <th class="pk-num">Сумма, ₽</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr>
+                            <td class="pk-num">{{ r.date|date:"d.m.Y" }}</td>
+                            <td>{{ r.account_name }}<div class="pk-mini-note">{{ r.bank_name|default:"" }}</div></td>
+                            <td>{{ r.badge }}</td>
+                            <td>
+                                {% if r.cf_name %}{{ r.cf_name }}<div class="pk-mini-note">{{ r.cf_code }}</div>
+                                {% else %}<span class="pk-field-sub">{{ r.activity_name }}</span>{% endif %}
+                            </td>
+                            <td>
+                                {{ r.cp_name|default:"—" }}
+                                {% if r.inn %}<div class="pk-mini-note">ИНН {{ r.inn }}</div>{% endif %}
+                            </td>
+                            <td class="pk-ops-desc">{{ r.description|default:"" }}</td>
+                            <td class="pk-num">{{ r.rub_cell }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="pk-dd-empty">Операций нет</div>
+    {% endif %}
+</div>

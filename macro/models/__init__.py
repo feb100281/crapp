@@ -1,0 +1,1 @@
+from .fx_model import Fx

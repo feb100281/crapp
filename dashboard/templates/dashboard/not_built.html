@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="pk-dash">
+    <div class="pk-status pk-status-bad">
+        <span class="material-symbols-outlined">hourglass_empty</span>
+        <div>
+            <div class="pk-status-title">Витрина ещё не построена</div>
+            <div class="pk-status-sub">
+                Таблицу {{ table }} создаёт job «ДДС и переоценка» (или импорт выписок).
+                Запустите его — и страница заработает.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

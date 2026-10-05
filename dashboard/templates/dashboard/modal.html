@@ -1,0 +1,22 @@
+{# Модалка операций: открывается pkOpsOpen() из ссылки с hx-get на фрагмент #}
+<div x-data="{ open: false }"
+     x-on:pk-ops-open.window="open = true"
+     x-on:keydown.escape.window="open = false"
+     x-show="open"
+     class="pk-modal"
+     style="display: none">
+    <div class="pk-modal-backdrop" x-on:click="open = false"></div>
+    <div class="pk-modal-panel">
+        <button type="button" class="pk-modal-close" x-on:click="open = false">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+        <div id="pk-ops-body"></div>
+    </div>
+</div>
+<script>
+    function pkOpsOpen() {
+        document.getElementById("pk-ops-body").innerHTML =
+            '<div class="pk-dd-empty">Загрузка…</div>';
+        window.dispatchEvent(new CustomEvent("pk-ops-open"));
+    }
+</script>

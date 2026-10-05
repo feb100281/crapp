@@ -1,0 +1,75 @@
+.env
+/.tmp/
+*.xlsx
+*.xls
+/venv/
+/.venv/
+.venv/
+__pycache__/
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.db
+*.zip
+#*.sql
+/data/
+
+
+# ========================================
+# DuckDB / Data
+# ========================================
+*.duckdb
+*.duckdb.wal
+*.parquet
+*.feather
+*.arrow
+*.csv
+
+# ========================================
+# Django
+# ========================================
+db.sqlite3
+db.sqlite3-*
+media/
+staticfiles/
+
+# ========================================
+# macOS / Linux
+# ========================================
+.DS_Store
+.Trashes
+Thumbs.db
+# ========================================
+# Build
+# ========================================
+build/
+dist/
+*.egg-info/
+
+# ========================================
+# Secrets
+# ========================================
+*.pem
+*.key
+*.crt
+.zst
+*.zst
+*.zip
+*.tar
+
+install.sh
+install.sh.*
+*.bak
+
+# ========================================
+# Node (Tailwind)
+# ========================================
+node_modules/

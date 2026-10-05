@@ -1,0 +1,57 @@
+{# Фрагмент для модалки: операции счёта за день (подгружается htmx) #}
+<div class="pk-ops">
+    <div class="pk-ops-head">
+        <div class="pk-hero-kicker">Операции за {{ acc.date|date:"d.m.Y" }}</div>
+        <div class="pk-ops-title">{{ acc.account_name }}</div>
+        <div class="pk-ops-sub">{{ acc.bank_name|default:"" }} · {{ acc.ba_number }} · {{ acc.currency }}{% if is_fx and acc.rate %} · курс {{ acc.rate|floatformat:4 }}{% endif %}</div>
+    </div>
+
+    <div class="pk-kpi-grid">
+        {% for k in kpis %}
+            <div class="pk-kpi-card">
+                <div class="pk-kpi-label">{{ k.label }}</div>
+                <div class="pk-kpi-value pk-kpi-{{ k.tone }}">{{ k.value }}</div>
+            </div>
+        {% endfor %}
+    </div>
+
+    {% if rows %}
+        <div class="pk-scroll pk-ops-scroll">
+            <table class="pk-mini-table">
+                <thead>
+                    <tr>
+                        <th>Тип</th>
+                        <th>Статья</th>
+                        <th>Контрагент</th>
+                        <th>Назначение платежа</th>
+                        {% if is_fx %}<th class="pk-num">Сумма, {{ acc.currency }}</th>{% endif %}
+                        <th class="pk-num">Сумма, ₽</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr>
+                            <td>{{ r.badge }}</td>
+                            <td>
+                                {% if r.cf_name %}
+                                    {{ r.cf_name }}<div class="pk-mini-note">{{ r.cf_code }} · {{ r.activity_name }}</div>
+                                {% else %}
+                                    <span class="pk-field-sub">{{ r.activity_name }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ r.cp_name|default:"—" }}
+                                {% if r.inn %}<div class="pk-mini-note">ИНН {{ r.inn }}</div>{% endif %}
+                            </td>
+                            <td class="pk-ops-desc">{{ r.description|default:"" }}</td>
+                            {% if is_fx %}<td class="pk-num">{{ r.cur_cell }}</td>{% endif %}
+                            <td class="pk-num">{{ r.rub_cell }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="pk-dd-empty">Операций за день нет — остаток перенесён</div>
+    {% endif %}
+</div>

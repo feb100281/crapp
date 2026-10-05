@@ -1,0 +1,68 @@
+{% if dash %}
+<div class="pk-dash">
+
+    {% if dash.hero %}
+        <div class="pk-hero">
+            <div class="pk-hero-kicker">{{ dash.hero.kicker }}</div>
+            <div class="pk-hero-title">{{ dash.hero.title }}{% if dash.hero.accent %} <span class="pk-hero-accent">{{ dash.hero.accent }}</span>{% endif %}</div>
+            {% if dash.hero.sub %}<div class="pk-hero-sub">{{ dash.hero.sub }}</div>{% endif %}
+        </div>
+    {% endif %}
+
+    {% if dash.status %}
+        <div class="pk-status pk-status-{{ dash.status.tone }}">
+            <span class="material-symbols-outlined">{{ dash.status.icon }}</span>
+            <div>
+                <div class="pk-status-title">{{ dash.status.title }}</div>
+                {% if dash.status.sub %}<div class="pk-status-sub">{{ dash.status.sub }}</div>{% endif %}
+                {% if dash.status.rows %}
+                    <table class="pk-status-list">
+                        {% for name, when, amount in dash.status.rows %}
+                            <tr><td>{{ name }}</td><td>{{ when }}</td><td class="pk-num">{{ amount }}</td></tr>
+                        {% endfor %}
+                    </table>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if dash.kpis %}
+        <div class="pk-kpi-grid">
+            {% for k in dash.kpis %}
+                <div class="pk-kpi-card">
+                    <div class="pk-kpi-label">{{ k.label }}</div>
+                    <div class="pk-kpi-value pk-kpi-{{ k.tone }}">{{ k.value }}</div>
+                    {% if k.sub %}<div class="pk-kpi-sub">{{ k.sub }}</div>{% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if dash.charts %}
+        <div class="pk-chart-grid">
+            {% for c in dash.charts %}
+                <div class="pk-card pk-chart-card{% if c.wide %} pk-chart-wide{% endif %}">
+                    <div class="pk-chart-head">
+                        <div class="pk-chart-title">{{ c.title }}</div>
+                        {% if c.legend %}
+                            <div class="pk-chart-legend">
+                                {% for name, css in c.legend %}<span><i class="{{ css }}"></i>{{ name }}</span>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="pk-chart-box">
+                    {% if c.type == "bar" %}
+                        {% include "unfold/components/chart/bar.html" with data=c.data options=c.options %}
+                    {% else %}
+                        {% include "unfold/components/chart/line.html" with data=c.data options=c.options %}
+                    {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+</div>
+{% endif %}
+
+{% include "dashboard/modal.html" %}
