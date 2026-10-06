@@ -1273,4 +1273,110 @@
     .pk-dot-a4 { background: var(--color-pk-sky); }
     .pk-dot-a9 { background: #9ca3af; }
     .pk-chart-grid:has(.pk-chart-card:only-child) .pk-chart-box { height: 280px; }
+
+    /* --- Главная: карточки дашбордов и разделов --- */
+    .pk-home { max-width: 1200px; margin: 0 auto; padding: 20px 0; display: flex; flex-direction: column; gap: 16px; }
+    .pk-home-heading {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--color-pk-navy);
+    }
+    .pk-home-heading .material-symbols-outlined { font-size: 18px; color: var(--color-pk-sky); }
+    .pk-home-asof { margin-left: auto; font-size: 11px; font-weight: 500; color: var(--color-pk-muted); }
+    .dark .pk-home-heading { color: var(--color-pk-sky); }
+
+    .pk-dash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+    .pk-dash-card {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 18px 20px;
+        border: 1px solid var(--color-pk-line);
+        border-radius: 12px;
+        background: #fff;
+        color: inherit;
+        transition: border-color .15s, box-shadow .15s, transform .15s;
+    }
+    .pk-dash-card:hover { border-color: var(--color-pk-sky); box-shadow: 0 8px 24px -12px #18324a40; transform: translateY(-1px); }
+    .dark .pk-dash-card { background: var(--color-base-900); border-color: var(--color-base-700); }
+    .dark .pk-dash-card:hover { border-color: var(--color-pk-blue); }
+    .pk-dash-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .pk-dash-card-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        color: var(--color-pk-navy);
+        background: var(--color-pk-pale);
+    }
+    .pk-dash-card-icon .material-symbols-outlined { font-size: 20px; }
+    .dark .pk-dash-card-icon { color: var(--color-pk-sky); background: #18324a59; }
+    .pk-dash-card-title { font-size: 13px; font-weight: 700; color: var(--color-pk-ink); }
+    .dark .pk-dash-card-title { color: var(--color-base-100); }
+    .pk-dash-card-arrow { margin-left: auto; font-size: 18px; color: var(--color-pk-muted); transition: transform .15s, color .15s; }
+    .pk-dash-card:hover .pk-dash-card-arrow { transform: translateX(3px); color: var(--color-pk-blue); }
+    .pk-dash-card-value {
+        font-size: 26px;
+        font-weight: 700;
+        line-height: 1.15;
+        color: var(--color-pk-navy);
+        font-variant-numeric: tabular-nums;
+    }
+    .dark .pk-dash-card-value { color: #fff; }
+    .pk-dash-card-sub { font-size: 12px; color: var(--color-pk-muted); }
+    .pk-dash-card-spark { height: 64px; margin: 4px 0; }
+    .pk-dash-card-spark > div { height: 100%; }
+    .pk-dash-card-rows { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; font-size: 12px; }
+    .pk-dash-card-rows div { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--color-pk-line); padding-bottom: 3px; }
+    .pk-dash-card-rows span { color: var(--color-pk-muted); }
+    .pk-dash-card-rows b { font-variant-numeric: tabular-nums; }
+
+    .pk-chip {
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: auto;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .pk-chip .material-symbols-outlined { font-size: 14px; }
+    .pk-chip-ok   { color: var(--color-pk-rise); background: #1a7a5e1a; }
+    .pk-chip-bad  { color: var(--color-pk-fall); background: #b54a3f1a; }
+    .pk-chip-warn { color: var(--color-pk-gold); background: #b8862e1f; }
+    .dark .pk-chip-ok   { color: #4ade9b; }
+    .dark .pk-chip-bad  { color: #e38b7d; }
+    .dark .pk-chip-warn { color: #e0b15c; }
+
+    .pk-link-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+    .pk-link-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--color-pk-line);
+        border-radius: 10px;
+        background: var(--color-pk-pale-soft);
+        color: inherit;
+        transition: border-color .15s, background .15s;
+    }
+    .pk-link-card:hover { border-color: var(--color-pk-sky); background: #fff; }
+    .dark .pk-link-card { background: var(--color-base-800); border-color: var(--color-base-700); }
+    .dark .pk-link-card:hover { background: var(--color-base-900); border-color: var(--color-pk-blue); }
+    .pk-link-card-title { display: block; font-size: 12.5px; font-weight: 600; color: var(--color-pk-ink); }
+    .pk-link-card-sub { display: block; font-size: 11px; color: var(--color-pk-muted); }
+    .dark .pk-link-card-title { color: var(--color-base-100); }
+
+    .pk-flow { margin: 0; padding-left: 18px; list-style: decimal; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.5; }
+    .pk-flow b { color: var(--color-pk-navy); }
+    .dark .pk-flow b { color: var(--color-pk-sky); }
 }

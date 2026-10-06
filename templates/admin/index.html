@@ -3,11 +3,7 @@
 {% load i18n unfold %}
 
 {% block title %}
-    {% if subtitle %}
-        {{ subtitle }} |
-    {% endif %}
-
-    {{ title }} | {{ site_title|default:_('Django site admin') }}
+    {% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}
 {% endblock %}
 
 {% block branding %}
@@ -15,66 +11,139 @@
 {% endblock %}
 
 {% block content %}
+<div class="pk-home">
 
-<div class="max-w-5xl mx-auto py-5 space-y-5">
-
+    {# --- приветствие --- #}
     <div class="pk-hero">
-        <div class="pk-hero-kicker">Поклонка Плэйс · Управленческий дашборд</div>
+        <div class="pk-hero-kicker">COSMORELAX · Управленческий дашборд</div>
         <h1 class="pk-hero-title">
             Добро пожаловать,
             <span class="pk-hero-accent">{{ request.user.first_name|default:request.user.username }}</span>!
         </h1>
         <p class="pk-hero-sub">
-            Аналитический портал бизнес-центра «Поклонка Плэйс»
+            Казначейство и управленческий учёт ООО «Космо»: банковские выписки, движение денег,
+            остатки и главная книга — в одном месте.
         </p>
     </div>
 
-    <div class="pk-card">
+    {# --- дашборды --- #}
+    <div class="pk-home-heading">
+        <span class="material-symbols-outlined">monitoring</span>
+        Дашборды
+        {% if cards %}<span class="pk-home-asof">данные по выпискам на {{ cards.date|date:"d.m.Y" }}</span>{% endif %}
+    </div>
 
-        <div class="pk-section-heading">
-            <span class="pk-section-number">01</span>
-            <span class="pk-section-title">О системе</span>
-        </div>
+    <div class="pk-dash-cards">
 
-        <p class="mb-3 text-[12.5px] leading-relaxed text-base-700 dark:text-base-300">
-            Настоящий портал предназначен для централизованного управления,
-            анализа и контроля деятельности бизнес-центра
-            <strong class="text-pk-navy dark:text-pk-sky">«Поклонка Плэйс»</strong>.
-        </p>
+        {# Остатки #}
+        <a href="{{ links.balance }}" class="pk-dash-card">
+            <div class="pk-dash-card-top">
+                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
+                <span class="pk-dash-card-title">Остатки по дням</span>
+                <span class="material-symbols-outlined pk-dash-card-arrow">arrow_forward</span>
+            </div>
+            {% if cards %}
+                <div class="pk-dash-card-value">{{ cards.balance }} ₽</div>
+                <div class="pk-dash-card-sub">деньги на всех счетах на {{ cards.date|date:"d.m.Y" }}</div>
+                <div class="pk-dash-card-spark">
+                    {% include "unfold/components/chart/line.html" with data=cards.spark options=cards.spark_options %}
+                </div>
+                {% if cards.stale %}
+                    <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">report</span>{{ cards.stale }} счетов без свежей выписки · {{ cards.stale_rub }} ₽</span>
+                {% else %}
+                    <span class="pk-chip pk-chip-ok"><span class="material-symbols-outlined">verified</span>выписки актуальны</span>
+                {% endif %}
+            {% else %}
+                <div class="pk-dash-card-sub">Остаток по всем счетам день за днём, раскрытие по счетам и операциям.</div>
+            {% endif %}
+        </a>
 
-        <p class="mb-3 text-[12.5px] leading-relaxed text-base-700 dark:text-base-300">
-            Система объединяет данные по договорам аренды, контрагентам,
-            объектам недвижимости, финансовым показателям и другим ключевым
-            аспектам деятельности комплекса, обеспечивая единую информационную
-            среду для принятия управленческих решений.
-        </p>
+        {# ДДС #}
+        <a href="{{ links.cash_flow }}" class="pk-dash-card">
+            <div class="pk-dash-card-top">
+                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">table_chart</span></span>
+                <span class="pk-dash-card-title">Отчёт ДДС</span>
+                <span class="material-symbols-outlined pk-dash-card-arrow">arrow_forward</span>
+            </div>
+            {% if cards %}
+                <div class="pk-dash-card-value{% if cards.net_neg %} pk-kpi-neg{% else %} pk-kpi-pos{% endif %}">{{ cards.net }} ₽</div>
+                <div class="pk-dash-card-sub">чистый денежный поток с начала {{ cards.year|stringformat:"d" }} года</div>
+                <div class="pk-dash-card-rows">
+                    <div><span>Поступления</span><b class="pk-kpi-pos">{{ cards.inflow }}</b></div>
+                    <div><span>Выплаты</span><b class="pk-kpi-neg">{{ cards.outflow }}</b></div>
+                </div>
+                <span class="pk-chip {% if cards.unalloc_pct != '0' %}pk-chip-warn{% else %}pk-chip-ok{% endif %}">
+                    <span class="material-symbols-outlined">rule</span>не разнесено {{ cards.unalloc_pct }}% оборота
+                </span>
+            {% else %}
+                <div class="pk-dash-card-sub">Деятельность → статья × месяцы, клик по сумме — операции.</div>
+            {% endif %}
+        </a>
 
-        <p class="mb-2 text-[12.5px] leading-relaxed text-base-700 dark:text-base-300">
-            Портал предназначен для ежедневной работы:
-        </p>
+        {# Сверка #}
+        <a href="{{ links.check }}" class="pk-dash-card">
+            <div class="pk-dash-card-top">
+                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">fact_check</span></span>
+                <span class="pk-dash-card-title">Сверка ДДС с остатками</span>
+                <span class="material-symbols-outlined pk-dash-card-arrow">arrow_forward</span>
+            </div>
+            {% if cards %}
+                {% if cards.off %}
+                    <div class="pk-dash-card-value pk-kpi-neg">{{ cards.off }} из {{ cards.checked }}</div>
+                    <div class="pk-dash-card-sub">счетов, где начало + ДДС ≠ конец</div>
+                    <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">report</span>нужна проверка</span>
+                {% else %}
+                    <div class="pk-dash-card-value pk-kpi-pos">Всё сходится</div>
+                    <div class="pk-dash-card-sub">проверено счетов: {{ cards.checked }}</div>
+                    <span class="pk-chip pk-chip-ok"><span class="material-symbols-outlined">verified</span>начало + ДДС = конец</span>
+                {% endif %}
+            {% else %}
+                <div class="pk-dash-card-sub">Остаток на начало + движение по ДДС = остаток на конец по каждому счёту.</div>
+            {% endif %}
+        </a>
+    </div>
 
-        <ul class="mb-5 ml-4 list-disc space-y-1 text-[12.5px] text-base-700 dark:text-base-300">
-            <li>Топ-менеджмента.</li>
-            <li>Финансового отдела.</li>
-            <li>Отдела планирования и бюджетирования.</li>
-            <li>Менеджеров отдела аренды.</li>
-            <li>Службы эксплуатации.</li>
-            <li>Внутренних аудиторов.</li>
-            <li>Аналитиков и руководителей подразделений.</li>
-        </ul>
-
+    {% if not cards %}
         <div class="pk-callout">
-            <div class="pk-callout-label">Начало работы</div>
+            <div class="pk-callout-label">Цифр пока нет</div>
             <div class="pk-callout-body">
-                Для перехода к необходимому разделу используйте меню,
-                расположенное слева. На следующих этапах главная страница
-                будет дополнена ключевыми показателями эффективности,
-                аналитическими панелями и оперативной информацией.
+                Витрины строятся командой «ДДС и переоценка» (или импортом выписок) — запустите её
+                в разделе «Команды», и здесь появятся остатки, поток и сверка.
             </div>
         </div>
+    {% endif %}
 
+    {# --- разделы --- #}
+    <div class="pk-home-heading">
+        <span class="material-symbols-outlined">apps</span>
+        Рабочие разделы
+    </div>
+
+    <div class="pk-link-cards">
+        {% for icon, title, sub, url in sections %}
+            <a href="{{ url }}" class="pk-link-card">
+                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">{{ icon }}</span></span>
+                <span>
+                    <span class="pk-link-card-title">{{ title }}</span>
+                    <span class="pk-link-card-sub">{{ sub }}</span>
+                </span>
+            </a>
+        {% endfor %}
+    </div>
+
+    {# --- как это работает --- #}
+    <div class="pk-card">
+        <div class="pk-section-heading">
+            <span class="pk-section-number">↻</span>
+            <span class="pk-section-title">Как обновляются данные</span>
+        </div>
+        <ol class="pk-flow">
+            <li><b>Выписки</b> из банков (1С-формат) — команда «Выписки»: новые строки добавляются, повторы не задваиваются.</li>
+            <li><b>Разноска</b> по статьям ДДС — резолверы КБК, счетов контрагентов и «между своими»; ручная разноска не перезаписывается.</li>
+            <li><b>Курсы ЦБ и переоценка</b> — валютные счета в рублях, курсовые разницы по дням.</li>
+            <li><b>Витрины дашбордов</b> пересобираются целиком: ДДС, остатки, сверка.</li>
+        </ol>
     </div>
 
 </div>
-
 {% endblock %}
