@@ -37,9 +37,11 @@ class BSLine(models.Model):
         help_text="md5 реквизитов операции",
     )
 
+    # удалили выписку в админке → её строки (и разноска) уходят вместе с ней;
+    # повторный импорт файла вернёт строки, ручная разноска при этом теряется
     statement = models.ForeignKey(
         Statement,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="lines",

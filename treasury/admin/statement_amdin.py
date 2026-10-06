@@ -71,3 +71,15 @@ class SatatemnetAdmin(AppModelAdmin):
             return mark_safe('<span class="pk-field-sub">—</span>')
 
         return str(currency)
+
+    def get_deleted_objects(self, objs, request):
+        """
+        Строки выписки и разноска в админке только для чтения (удалять по одной
+        нельзя), но вместе с выпиской удалять их можно — не требуем на них прав.
+        """
+        from ..models.bs_line_alloc_model import BSLineAlloc
+        from ..models.bs_line_model import BSLine
+
+        deleted, model_count, perms_needed, protected = super().get_deleted_objects(objs, request)
+        skip = {BSLine._meta.verbose_name, BSLineAlloc._meta.verbose_name}
+        return deleted, model_count, perms_needed - skip, protected
