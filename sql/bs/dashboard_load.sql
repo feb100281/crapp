@@ -93,18 +93,73 @@ FROM cash_reval
 GROUP BY date;
 
 
+-- Сверка с банком по каждому счёту:
+--   • конечный остаток последней выписки против нашего расчёта на ту же дату
+--     (расчёт = ввод остатков + все строки выписок + проводки ГК);
+--   • дыры между выписками: следующая выписка начинается позже, чем
+--     закончилась предыдущая, И её входящий остаток ≠ исходящему предыдущей
+--     (выходные без операций дырой не считаются).
+--   • внутренняя арифметика отчёта (начало + ДДС = конец) — колонка check_rub.
 CREATE OR REPLACE TABLE target_db.dashboard_cash_check AS
+WITH st AS (
+    SELECT
+        ba_account_id       AS ba_id,
+        date_from::DATE     AS df,
+        date_to::DATE       AS dt,
+        bb::DOUBLE          AS bb,
+        eb::DOUBLE          AS eb
+    FROM target_db.treasury_statement
+    WHERE ba_account_id IS NOT NULL
+),
+last_st AS (
+    SELECT ba_id, max(dt) AS stmt_to, arg_max(eb, dt) AS bank_eb, count(*) AS statements
+    FROM st
+    GROUP BY ba_id
+),
+seq AS (
+    SELECT
+        *,
+        lag(dt) OVER (PARTITION BY ba_id ORDER BY df, dt) AS prev_to,
+        lag(eb) OVER (PARTITION BY ba_id ORDER BY df, dt) AS prev_eb
+    FROM st
+),
+gaps AS (
+    SELECT
+        ba_id,
+        count(*) AS gap_count,
+        string_agg(strftime(prev_to + 1, '%d.%m.%Y') || '–' || strftime(df - 1, '%d.%m.%Y'), ', '
+                   ORDER BY df) AS gaps,
+        sum(bb - prev_eb) AS gap_amount
+    FROM seq
+    WHERE prev_to IS NOT NULL
+      AND df > prev_to + 1
+      AND abs(bb - prev_eb) >= 0.01
+    GROUP BY ba_id
+)
 SELECT
-    row_number() OVER (ORDER BY abs(k.diff) DESC, k.ba_id) AS id,
+    row_number() OVER (ORDER BY abs(COALESCE(c.base_eb - l.bank_eb, 0) * COALESCE(c.rate, 1)) DESC, k.ba_id) AS id,
     k.ba_id,
-    k.number                    AS ba_number,
-    COALESCE(g.name, k.number)  AS account_name,
-    b.name                      AS bank_name,
+    k.number                                    AS ba_number,
+    COALESCE(g.name, k.number)                  AS account_name,
+    b.name                                      AS bank_name,
+    c.currency,
+    strftime(l.stmt_to, '%Y-%m-%d')             AS stmt_to,
+    l.statements,
+    round(l.bank_eb, 2)                         AS bank_eb,
+    round(c.base_eb, 2)                         AS calc_eb,
+    round(c.base_eb - l.bank_eb, 2)             AS diff_cur,
+    round((c.base_eb - l.bank_eb) * c.rate, 2)  AS diff_rub,
+    COALESCE(gp.gap_count, 0)                   AS gap_count,
+    gp.gaps,
+    round(gp.gap_amount, 2)                     AS gap_amount,
     k.opening_rub,
     k.flows_rub,
     k.closing_rub,
-    k.diff
+    k.diff                                      AS check_rub
 FROM cash_flow_check k
+LEFT JOIN last_st l    ON l.ba_id = k.ba_id
+LEFT JOIN cash_reval c ON c.ba_id = k.ba_id AND c.date = l.stmt_to
+LEFT JOIN gaps gp      ON gp.ba_id = k.ba_id
 LEFT JOIN target_db.treasury_bankaccount a ON a.id = k.ba_id
 LEFT JOIN target_db.cp_cp b                ON b.id = a.bank_id
 LEFT JOIN target_db.gl_glaccount g         ON g.bank_account_id = k.ba_id;

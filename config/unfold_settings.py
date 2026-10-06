@@ -95,7 +95,7 @@ UNFOLD_SETTINGD = {
                         "link": reverse_lazy("admin:dashboard_cashbalanceday_changelist"),
                     },
                     {
-                        "title": "Сверка ДДС с остатками",
+                        "title": "Сверка с банком",
                         "icon": "fact_check",
                         "link": reverse_lazy("admin:dashboard_cashcheck_changelist"),
                     },

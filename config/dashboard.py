@@ -59,7 +59,10 @@ def _cards() -> dict:
 
     # --- сверка
     checked = CashCheck.objects.count()
-    off = CashCheck.objects.filter(Q(diff__gte=1) | Q(diff__lte=-1)).count()
+    off = CashCheck.objects.filter(
+        Q(diff_cur__gte=0.01) | Q(diff_cur__lte=-0.01) | Q(gap_count__gt=0)
+    ).count()
+    gaps = CashCheck.objects.filter(gap_count__gt=0).count()
 
     return {
         "date": last.date,
@@ -76,6 +79,7 @@ def _cards() -> dict:
         "unalloc_pct": f"{100 * unalloc / turnover:.0f}" if turnover else "0",
         "checked": checked,
         "off": off,
+        "gaps": gaps,
     }
 
 

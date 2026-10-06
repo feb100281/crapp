@@ -51,6 +51,18 @@ def build(log=print) -> dict:
 
         # витрины дашборда — целиком заменяются в SQLite
         con.execute(sql.read("bs", "dashboard_load.sql"))
+
+        # главная сверка — с банком: остаток последней выписки и пропуски выписок
+        bank_off = con.execute(
+            "SELECT ba_number, stmt_to, bank_eb, calc_eb, diff_cur, gaps "
+            "FROM target_db.dashboard_cash_check "
+            "WHERE abs(COALESCE(diff_cur, 0)) >= 0.01 OR gap_count > 0 ORDER BY id"
+        ).fetchall()
+        log(f"     сверка с банком (последняя выписка): "
+            f"{'всё сходится' if not bank_off else f'не сходится счетов: {len(bank_off)}'}")
+        for number, stmt_to, bank_eb, calc_eb, diff, gaps in bank_off:
+            log(f"       {number} на {stmt_to}: банк {bank_eb:,.2f}, расчёт {calc_eb:,.2f}, "
+                f"разница {diff:+,.2f}".replace(",", " ") + (f"; нет выписок: {gaps}" if gaps else ""))
         log("     витрины дашборда обновлены (dashboard_cash_flow / _balance / _balance_day / _check)")
 
         days, no_rate, bad = con.execute(
@@ -96,7 +108,7 @@ def build(log=print) -> dict:
             "SELECT number, opening_rub, flows_rub, closing_rub, diff "
             "FROM cash_flow_check WHERE abs(diff) > 1"
         ).fetchall()
-        log(f"     сверка ДДС с остатками: {'всё сходится' if not off else f'не сходится счетов: {len(off)}'}")
+        log(f"     арифметика ДДС (начало + ДДС = конец): {'ок' if not off else f'не сходится счетов: {len(off)}'}")
         for row in off:
             log(f"       {row}")
 

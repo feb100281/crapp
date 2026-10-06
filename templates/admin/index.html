@@ -84,21 +84,25 @@
         <a href="{{ links.check }}" class="pk-dash-card">
             <div class="pk-dash-card-top">
                 <span class="pk-dash-card-icon"><span class="material-symbols-outlined">fact_check</span></span>
-                <span class="pk-dash-card-title">Сверка ДДС с остатками</span>
+                <span class="pk-dash-card-title">Сверка с банком</span>
                 <span class="material-symbols-outlined pk-dash-card-arrow">arrow_forward</span>
             </div>
             {% if cards %}
                 {% if cards.off %}
                     <div class="pk-dash-card-value pk-kpi-neg">{{ cards.off }} из {{ cards.checked }}</div>
-                    <div class="pk-dash-card-sub">счетов, где начало + ДДС ≠ конец</div>
-                    <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">report</span>нужна проверка</span>
+                    <div class="pk-dash-card-sub">счетов не сходятся с остатком последней выписки</div>
+                    {% if cards.gaps %}
+                        <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">event_busy</span>нет выписок за период: {{ cards.gaps }} счетов</span>
+                    {% else %}
+                        <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">report</span>нужна проверка</span>
+                    {% endif %}
                 {% else %}
                     <div class="pk-dash-card-value pk-kpi-pos">Всё сходится</div>
-                    <div class="pk-dash-card-sub">проверено счетов: {{ cards.checked }}</div>
-                    <span class="pk-chip pk-chip-ok"><span class="material-symbols-outlined">verified</span>начало + ДДС = конец</span>
+                    <div class="pk-dash-card-sub">с остатками последних выписок, счетов: {{ cards.checked }}</div>
+                    <span class="pk-chip pk-chip-ok"><span class="material-symbols-outlined">verified</span>пропусков выписок нет</span>
                 {% endif %}
             {% else %}
-                <div class="pk-dash-card-sub">Остаток на начало + движение по ДДС = остаток на конец по каждому счёту.</div>
+                <div class="pk-dash-card-sub">Наш расчёт против конечного остатка последней выписки и пропуски между выписками.</div>
             {% endif %}
         </a>
     </div>
