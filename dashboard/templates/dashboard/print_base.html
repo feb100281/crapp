@@ -1,0 +1,98 @@
+{% load static %}<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ doc_title }}</title>
+<link href="{% static 'unfold/fonts/inter/styles.css' %}" rel="stylesheet">
+<style>
+    @page { size: A4; margin: 14mm 12mm 16mm; }
+    :root {
+        --navy: #18324A; --blue: #2F6B8A; --sky: #6D97AC; --pale: #EAF1F5; --pale-soft: #F4F8FA;
+        --ink: #1D2935; --muted: #6B7A87; --line: #D8E1E7; --gold: #B8862E; --fall: #B54A3F; --rise: #1A7A5E;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #e9eef1; color: var(--ink); }
+    body { font: 12px/1.45 Inter, -apple-system, "Segoe UI", Arial, sans-serif; }
+    .sheet { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 14mm 12mm 16mm; background: #fff;
+             box-shadow: 0 4px 24px #0000001a; }
+    .bar { width: 210mm; margin: 16px auto 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .bar button, .bar a, .bar select, .bar input { font: inherit; padding: 7px 12px; border: 1px solid var(--line);
+             border-radius: 4px; background: #fff; color: var(--ink); text-decoration: none; cursor: pointer; }
+    .bar .primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+    .bar .hint { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+    .head { border-bottom: 2px solid var(--gold); padding-bottom: 10px; margin-bottom: 14px; }
+    .kicker { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    h1 { font-size: 20px; margin: 4px 0 2px; color: var(--navy); }
+    .sub { color: var(--muted); }
+    .lead { margin: 0 0 14px; }
+
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 16px; }
+    .kpi { border: 1px solid var(--line); border-top: 2px solid var(--navy); padding: 7px 9px; }
+    .kpi b { display: block; font-size: 15px; color: var(--navy); }
+    .kpi span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+    h2 { font-size: 13px; margin: 18px 0 8px; color: var(--navy); text-transform: uppercase; letter-spacing: .05em; }
+    .card { border: 1px solid var(--line); border-left: 3px solid var(--fall); padding: 10px 12px; margin-bottom: 10px;
+            break-inside: avoid; }
+    .card.warn { border-left-color: var(--gold); }
+    .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .card-title { font-weight: 600; font-size: 13px; }
+    .acc { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+    .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+    .facts div { background: var(--pale-soft); padding: 5px 7px; }
+    .facts span { display: block; font-size: 10px; color: var(--muted); }
+    .facts b { font-variant-numeric: tabular-nums; }
+    .neg { color: var(--fall); }
+    .label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
+             margin-top: 6px; }
+    ul { margin: 3px 0 0; padding-left: 18px; }
+    li { margin: 2px 0; }
+    .ask li { font-weight: 600; }
+    .ask li small { display: block; font-weight: 400; color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #fff;
+         background: var(--navy); padding: 6px 7px; }
+    td { padding: 5px 7px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    td.num, th.num { text-align: right; white-space: nowrap; }
+    tbody tr:nth-child(even) td { background: var(--pale-soft); }
+    tr.group td { background: var(--pale) !important; font-weight: 600; color: var(--navy); }
+    tr.subtotal td { font-weight: 600; border-bottom: 1px solid var(--sky); }
+    tr.total td { font-weight: 700; border-top: 2px solid var(--navy); border-bottom: 3px double var(--navy);
+                  background: #fff !important; }
+    .note { font-size: 10px; color: var(--muted); }
+    .ok { border: 1px solid var(--line); border-left: 3px solid var(--rise); padding: 12px; }
+    .foot { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px;
+            display: flex; justify-content: space-between; }
+
+    @media print {
+        html, body { background: #fff; }
+        .bar { display: none; }
+        .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+        th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        td, .facts div, .kpi { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+</head>
+<body>
+<div class="bar">
+    <button type="button" class="primary" onclick="window.print()">Распечатать / сохранить в PDF</button>
+    {% block bar %}{% endblock %}
+    <span class="hint">В окне печати можно выбрать «Сохранить как PDF», чтобы отправить файлом</span>
+</div>
+<div class="sheet">
+    <div class="head">
+        <div class="kicker">{{ site_title }} · {{ kicker }}</div>
+        <h1>{{ doc_title }}</h1>
+        <div class="sub">{{ doc_sub }}</div>
+    </div>
+    {% block body %}{% endblock %}
+    <div class="foot">
+        <span>Сформировано {{ now|date:"d.m.Y H:i" }}</span>
+        <span>{{ site_title }}</span>
+    </div>
+</div>
+</body>
+</html>

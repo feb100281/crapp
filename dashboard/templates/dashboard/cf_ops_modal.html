@@ -1,9 +1,18 @@
 {# Фрагмент для модалки: операции строки отчёта ДДС за период (htmx) #}
+{% load l10n %}
 <div class="pk-ops">
     <div class="pk-ops-head">
         <div class="pk-hero-kicker">Операции · {{ period }}</div>
         <div class="pk-ops-title">{{ title }}</div>
         <div class="pk-ops-sub">{{ scope }}</div>
+        <div class="pk-ops-tools">
+            <div class="pk-seg">
+                <a href="#" hx-get="{{ ops_url }}" hx-target="#pk-ops-body" class="pk-seg-item{% if view == 'ops' %} pk-seg-active{% endif %}">Операции</a>
+                <a href="#" hx-get="{{ cp_url }}" hx-target="#pk-ops-body" class="pk-seg-item{% if view == 'cp' %} pk-seg-active{% endif %}">Контрагенты</a>
+            </div>
+            {% if back_url %}<a href="#" hx-get="{{ back_url }}" hx-target="#pk-ops-body" class="pk-btn"><span class="material-symbols-outlined">arrow_back</span>Все контрагенты</a>{% endif %}
+            {% if rows or cps %}<a href="{{ csv_url }}" class="pk-btn"><span class="material-symbols-outlined">download</span>CSV{% if view == 'cp' %} — контрагенты{% else %} — все операции{% endif %} ({{ count|unlocalize }})</a>{% endif %}
+        </div>
     </div>
 
     <div class="pk-kpi-grid">
@@ -15,7 +24,45 @@
         {% endfor %}
     </div>
 
-    {% if rows %}
+    {% if view == "cp" %}
+        {% if cps %}
+            <div class="pk-mini-note">Клик по контрагенту — его операции.{% if limited %} Показаны {{ limit }} крупнейших из {{ count }}.{% endif %}</div>
+            <div class="pk-scroll pk-ops-scroll">
+                <table class="pk-mini-table">
+                    <thead>
+                        <tr>
+                            <th>Контрагент</th>
+                            <th class="pk-num">Операций</th>
+                            <th class="pk-num">Поступления, ₽</th>
+                            <th class="pk-num">Выплаты, ₽</th>
+                            <th class="pk-num">Итого, ₽</th>
+                            <th class="pk-num">Доля</th>
+                            <th class="pk-num">Последняя</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for x in cps %}
+                            <tr>
+                                <td>
+                                    <a href="#" hx-get="{{ x.url }}" hx-target="#pk-ops-body" class="pk-cf-link">{{ x.name }}</a>
+                                    {% if x.inn %}<div class="pk-mini-note">ИНН {{ x.inn }}</div>{% endif %}
+                                </td>
+                                <td class="pk-num">{{ x.n|unlocalize }}</td>
+                                <td class="pk-num">{{ x.in_cell }}</td>
+                                <td class="pk-num">{{ x.out_cell }}</td>
+                                <td class="pk-num">{{ x.sum_cell }}</td>
+                                <td class="pk-num">{{ x.share }}</td>
+                                <td class="pk-num">{{ x.last|date:"d.m.Y" }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="pk-dd-empty">Контрагентов нет</div>
+        {% endif %}
+    {% elif rows %}
+        <div class="pk-mini-note">Ссылки в колонке «Разноска» открываются в новой вкладке. После правки резолвера нажмите «Пересчитать ДДС», чтобы цифры обновились.</div>
         {% if limited %}
             <div class="pk-mini-note">Показаны {{ limit }} крупнейших операций из {{ count }}.</div>
         {% endif %}
@@ -30,6 +77,7 @@
                         <th>Контрагент</th>
                         <th>Назначение платежа</th>
                         <th class="pk-num">Сумма, ₽</th>
+                        <th>Разноска</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -39,7 +87,7 @@
                             <td>{{ r.account_name }}<div class="pk-mini-note">{{ r.bank_name|default:"" }}</div></td>
                             <td>{{ r.badge }}</td>
                             <td>
-                                {% if r.cf_name %}{{ r.cf_name }}<div class="pk-mini-note">{{ r.cf_code }}</div>
+                                {% if r.cf_name %}{{ r.cf_name }}<div class="pk-mini-note">{{ r.cf_code|default:"" }}</div>
                                 {% else %}<span class="pk-field-sub">{{ r.activity_name }}</span>{% endif %}
                             </td>
                             <td>
@@ -48,6 +96,10 @@
                             </td>
                             <td class="pk-ops-desc">{{ r.description|default:"" }}</td>
                             <td class="pk-num">{{ r.rub_cell }}</td>
+                            <td class="pk-ops-links">
+                                {% if r.how %}<div class="pk-mini-note">{{ r.how }}</div>{% endif %}
+                                {% for label, url, hint in r.links %}<a href="{{ url }}" target="_blank" rel="noopener" title="{{ hint }}" class="pk-cf-link">{{ label }} ↗</a>{% endfor %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>

@@ -2,6 +2,8 @@
 Резолверы счетов: первые 5 цифр счёта контрагента + направление.
 
 Строки с КБК и переводы между своими счетами сюда не попадают.
+Если для контрагента заведён свой резолвер и его правило подошло —
+строка разносится им, правила счёта её не трогают.
 Удержанная комиссия / долг раскладываются автоматически в отчёте ДДС.
 """
 
@@ -34,11 +36,11 @@ class BaResolverAdmin(ResolverAdminBase):
         "items_display",
     ]
 
-    search_fields = ["key", "name", "payee", "rules__cf_item__name"]
-    search_help_text = "Цифры счёта, описание, контрагент или статья"
+    search_fields = ["key", "name", "payee", "rules__cf_item__name", "rules__text_regex"]
+    search_help_text = "Цифры счёта, описание, статья — или контрагент, ИНН, назначение из строк"
 
     readonly_fields = ["key", "direction", "payee", "lines_count", "amount_display",
-                       "open_display", "open_patterns_display"]
+                       "open_display", "open_patterns_display", "alloc_summary_display"]
 
     fieldsets = (
         (
@@ -50,6 +52,7 @@ class BaResolverAdmin(ResolverAdminBase):
                     "payee",
                     ("lines_count", "amount_display", "open_display"),
                     "open_patterns_display",
+                    "alloc_summary_display",
                     "note",
                 ),
             },

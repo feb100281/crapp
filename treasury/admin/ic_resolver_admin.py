@@ -41,7 +41,7 @@ class IcResolverAdmin(ResolverAdminBase):
     search_help_text = "Коды валют, описание или статья"
 
     readonly_fields = ["key", "direction", "lines_count", "amount_display",
-                       "open_display", "open_patterns_display"]
+                       "open_display", "open_patterns_display", "alloc_summary_display"]
 
     fieldsets = (
         (
@@ -52,6 +52,7 @@ class IcResolverAdmin(ResolverAdminBase):
                     "name",
                     ("lines_count", "amount_display", "open_display"),
                     "open_patterns_display",
+                    "alloc_summary_display",
                     "note",
                 ),
             },

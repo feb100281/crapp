@@ -1,0 +1,103 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="pk-form-page">
+
+    <div class="pk-card">
+        <div class="pk-section-heading">
+            <span class="pk-section-title">Что переносим · {{ direction }}</span>
+        </div>
+        <table class="pk-mini-table pk-mini-table-plain">
+            <thead>
+                <tr><th>Код</th><th>Статья</th><th>Где сейчас</th><th>Используется</th></tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                    <tr>
+                        <td class="pk-mono">{{ r.item.code }}</td>
+                        <td>
+                            <b>{{ r.item.name }}</b>
+                            {% if r.subs %}
+                                <div class="pk-mini-note">подстатьи: {% for s in r.subs %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+                            {% endif %}
+                            {% if r.locked %}<div class="pk-form-error">{{ r.locked }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {% if r.item.parent %}подстатья «{{ r.item.parent.name }}»{% else %}отдельная статья{% endif %}
+                            <div class="pk-mini-note">{{ r.item.get_activity_display }}</div>
+                        </td>
+                        <td>{{ r.usage }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <form method="post" class="pk-card pk-form" x-data="{ op: '{{ form.op.value|default:'sub' }}' }">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="pk-form-error">{{ form.non_field_errors }}</div>{% endif %}
+
+        <div class="pk-form-ops">
+            {% for value, label in form.fields.op.choices %}
+                <label class="pk-form-op" x-bind:class="op === '{{ value }}' && 'pk-form-op-active'">
+                    <input type="radio" name="op" value="{{ value }}" x-model="op">
+                    <span>{{ label }}</span>
+                </label>
+            {% endfor %}
+        </div>
+
+        <div class="pk-form-row" x-show="op === 'sub'">
+            <label for="id_parent">В какую статью</label>
+            <select name="parent" id="id_parent" class="pk-select pk-select-wide">
+                <option value="">— выберите статью —</option>
+                {% for item in form.fields.parent.queryset %}
+                    <option value="{{ item.pk }}"{% if form.parent.value|stringformat:"s" == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.code }} · {{ item.name }} ({{ item.get_activity_display }})</option>
+                {% endfor %}
+            </select>
+            {{ form.parent.errors }}
+            <p class="pk-form-help">Статья получит новый код внутри выбранной. Правила и разноска остаются на ней.
+                У статьи с подстатьями переедут подстатьи, а пустой заголовок удалится.</p>
+        </div>
+
+        <div class="pk-form-row" x-show="op === 'top'" style="display: none">
+            <label for="id_activity">Деятельность</label>
+            <select name="activity" id="id_activity" class="pk-select pk-select-wide">
+                {% for value, label in form.fields.activity.choices %}
+                    <option value="{{ value }}"{% if form.activity.value|stringformat:"s" == value|stringformat:"s" %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            {{ form.activity.errors }}
+            <p class="pk-form-help">Подстатья станет самостоятельной статьёй; статья — переедет в другую деятельность
+                вместе с подстатьями.</p>
+        </div>
+
+        <div class="pk-form-row" x-show="op === 'merge'" style="display: none">
+            <label for="id_target">С какой статьёй объединить</label>
+            <select name="target" id="id_target" class="pk-select pk-select-wide">
+                <option value="">— выберите статью —</option>
+                {% for item in form.fields.target.queryset %}
+                    <option value="{{ item.pk }}"{% if form.target.value|stringformat:"s" == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.code }} · {% if item.parent %}{{ item.parent.name }} → {% endif %}{{ item.name }}</option>
+                {% endfor %}
+            </select>
+            {{ form.target.errors }}
+            <label class="pk-form-check">
+                <input type="checkbox" name="delete_source"{% if form.delete_source.value %} checked{% endif %}>
+                <span>{{ form.delete_source.label }}</span>
+            </label>
+            <p class="pk-form-help">Все правила, разнесённые строки и проводки перейдут на выбранную статью.
+                Отменить объединение нельзя.</p>
+        </div>
+
+        <label class="pk-form-check">
+            <input type="checkbox" name="rebuild"{% if form.rebuild.value %} checked{% endif %}>
+            <span>{{ form.rebuild.label }}</span>
+        </label>
+        <p class="pk-form-help">Если переносов несколько — снимите галочку и пересчитайте ДДС один раз в конце.</p>
+
+        <div class="pk-form-actions">
+            <button type="submit" class="pk-btn pk-btn-primary">Выполнить</button>
+            <a href="{{ back }}" class="pk-btn">Отмена</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

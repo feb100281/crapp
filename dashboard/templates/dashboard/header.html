@@ -9,6 +9,18 @@
         </div>
     {% endif %}
 
+    {% if dash.exports or dash.prints %}
+        <div class="pk-export-bar">
+            <span class="pk-cf-hint">Скачать с текущими фильтрами</span>
+            {% for label, url in dash.prints %}
+                <a href="{{ url }}" class="pk-btn pk-btn-primary" target="_blank" rel="noopener"><span class="material-symbols-outlined">print</span>{{ label }}</a>
+            {% endfor %}
+            {% for label, url in dash.exports %}
+                <a href="{{ url }}" class="pk-btn"><span class="material-symbols-outlined">download</span>{{ label }}</a>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     {% if dash.status %}
         <div class="pk-status pk-status-{{ dash.status.tone }}">
             <span class="material-symbols-outlined">{{ dash.status.icon }}</span>

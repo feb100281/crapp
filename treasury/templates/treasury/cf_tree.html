@@ -1,0 +1,109 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div class="pk-cf-page">
+
+    <div class="pk-card pk-cf-card pk-tree"
+         x-data='{ "open": {{ open_state|safe }}, "q": "" }'
+         x-init="$nextTick(() => pkTreeZebra($el)); $watch('open', () => $nextTick(() => pkTreeZebra($el))); $watch('q', () => $nextTick(() => pkTreeZebra($el)))">
+        <div class="pk-cf-actions pk-tree-bar">
+            <input type="search" class="pk-input pk-tree-search" placeholder="Поиск: код, статья, описание"
+                   x-model.debounce.150ms="q">
+            <button type="button" class="pk-btn" x-on:click="Object.keys(open).forEach(k => open[k] = true)">Развернуть всё</button>
+            <button type="button" class="pk-btn" x-on:click="Object.keys(open).forEach(k => open[k] = !/^i/.test(k))">Только статьи</button>
+            <span class="pk-cf-hint">
+                <span class="material-symbols-outlined pk-tree-lock">lock</span> нельзя переносить
+                · статей {{ counts.items }} · подстатей {{ counts.subs }}
+            </span>
+            <a href="{{ add_url }}" class="pk-btn pk-btn-primary"><span class="material-symbols-outlined">add</span>Статья</a>
+            <a href="{{ xlsx_url }}" class="pk-btn"><span class="material-symbols-outlined">download</span>Excel</a>
+            <a href="{{ list_url }}" class="pk-btn"><span class="material-symbols-outlined">list</span>Списком</a>
+        </div>
+
+        <div class="pk-cf-scroll">
+            <table class="pk-cf-table pk-tree-table">
+                <thead>
+                    <tr>
+                        <th class="pk-tree-actions"></th>
+                        <th class="pk-cf-name">Статья</th>
+                        <th class="pk-cf-num">Правил</th>
+                        <th class="pk-cf-num">Строк</th>
+                        <th class="pk-cf-num">Оборот, ₽</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr class="pk-tree-{{ r.kind }} pk-cf-l{{ r.level }}{% if r.kind == 'item' or r.kind == 'sub' %}{% if not r.active %} pk-tree-off{% endif %}{% endif %}"
+                            data-s="{{ r.search }}"
+                            x-show="q ? $el.dataset.s.includes(q.toLowerCase()) : ({{ r.show }})">
+                            <td class="pk-tree-actions">
+                                {% if r.move_url and not r.locked %}<a href="{{ r.move_url }}" title="Перенести / объединить"><span class="material-symbols-outlined">move_up</span></a>{% elif r.locked %}<span class="pk-tree-noop" title="Код зашит в расчёт ДДС — переносить нельзя"><span class="material-symbols-outlined">lock</span></span>{% else %}<span class="pk-tree-noop"></span>{% endif %}
+                                {% if r.edit_url %}<a href="{{ r.edit_url }}" title="Изменить"><span class="material-symbols-outlined">edit</span></a>{% else %}<span class="pk-tree-noop"></span>{% endif %}
+                                {% if r.add_url %}<a href="{{ r.add_url }}" title="{% if r.kind == 'direction' %}Добавить статью{% else %}Добавить подстатью{% endif %}"><span class="material-symbols-outlined">add</span></a>{% endif %}
+                            </td>
+                            <th class="pk-cf-name">
+                                <div class="pk-cf-label">
+                                    {% if r.children %}
+                                        <button type="button" class="pk-cf-toggle"
+                                                x-on:click="open['{{ r.id }}'] = !open['{{ r.id }}']"
+                                                x-bind:class="open['{{ r.id }}'] && 'pk-cf-open'">
+                                            <span class="material-symbols-outlined">chevron_right</span>
+                                        </button>
+                                    {% else %}
+                                        <span class="pk-cf-spacer"></span>
+                                    {% endif %}
+                                    <span class="pk-cf-code">{{ r.code }}</span>
+                                    {% if r.edit_url %}<a href="{{ r.edit_url }}">{{ r.name }}</a>{% else %}<span>{{ r.name }}</span>{% endif %}
+                                    {% if r.reversible %}<span class="pk-chip pk-chip-warn" title="Принимает возвраты: встречные суммы уменьшают статью">± возвраты</span>{% endif %}
+                                </div>
+                            </th>
+                            <td class="pk-cf-num">
+                                {% if r.resolvers %}
+                                    <details class="pk-pop" x-on:toggle="pkPop($el)">
+                                        <summary class="pk-cf-link" title="Какие резолверы разносят сюда">{{ r.rules }}</summary>
+                                        <div class="pk-pop-body">
+                                            {% for x in r.resolvers %}
+                                                <a href="{{ x.url }}" target="_blank" rel="noopener">
+                                                    <span class="pk-pop-kind">{{ x.kind_label }}</span>
+                                                    <span class="pk-pop-name">{{ x.label }}</span>
+                                                    <span class="pk-pop-n">{{ x.n }}</span>
+                                                </a>
+                                            {% endfor %}
+                                        </div>
+                                    </details>
+                                {% else %}{{ r.rules|default:"" }}{% endif %}
+                            </td>
+                            <td class="pk-cf-num">{% if r.lines_url %}<a class="pk-cf-link" href="{{ r.lines_url }}" target="_blank" rel="noopener" title="Открыть операции">{{ r.allocs }}</a>{% else %}{{ r.allocs|default:"" }}{% endif %}</td>
+                            <td class="pk-cf-num">{% if r.lines_url %}<a class="pk-cf-link" href="{{ r.lines_url }}" target="_blank" rel="noopener" title="Открыть операции">{{ r.amount }}</a>{% else %}{{ r.amount }}{% endif %}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+    function pkPop(el) {
+        if (!el.open) return;
+        document.querySelectorAll("details.pk-pop[open]").forEach((d) => { if (d !== el) d.open = false; });
+        const r = el.querySelector("summary").getBoundingClientRect();
+        const body = el.querySelector(".pk-pop-body");
+        const below = window.innerHeight - r.bottom > 340;
+        body.style.right = (window.innerWidth - r.right) + "px";
+        body.style.top = below ? (r.bottom + 4) + "px" : "auto";
+        body.style.bottom = below ? "auto" : (window.innerHeight - r.top + 4) + "px";
+    }
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest("details.pk-pop")) document.querySelectorAll("details.pk-pop[open]").forEach((d) => d.open = false);
+    });
+    function pkTreeZebra(root) {
+        let i = 0;
+        root.querySelectorAll("tbody tr").forEach((tr) => {
+            const leaf = tr.classList.contains("pk-tree-item") || tr.classList.contains("pk-tree-sub");
+            if (!leaf) { i = 0; tr.classList.remove("pk-tree-zebra"); return; }
+            const shown = tr.style.display !== "none";
+            tr.classList.toggle("pk-tree-zebra", shown && i++ % 2 === 1);
+        });
+    }
+</script>
+{% endblock %}

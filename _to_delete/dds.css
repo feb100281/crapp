@@ -1,0 +1,15 @@
+/* отчёт ДДС: месяц раскрывается по дням */
+.pk-cf-mhead a { display: inline-flex; align-items: center; gap: 2px; color: inherit; }
+.pk-cf-mhead a:hover { color: var(--color-pk-blue); }
+.pk-cf-mhead .material-symbols-outlined { font-size: 16px; color: var(--color-pk-muted); }
+.pk-cf-table .pk-cf-mopen { background: #e3edf3; font-weight: 600; }
+.pk-cf-table .pk-cf-day { background: #f4f8fa; font-size: 12px; min-width: 84px; }
+.pk-cf-table th.pk-cf-day { color: var(--color-pk-muted); font-weight: 500; }
+.dark .pk-cf-table .pk-cf-mopen { background: #ffffff10; }
+.dark .pk-cf-table .pk-cf-day { background: #ffffff06; }
+.pk-ops-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+/* отчёт ДДС: тонкие разделители колонок */
+.pk-cf-table td.pk-cf-num, .pk-cf-table th.pk-cf-num { border-left: 1px solid #e3eaef; }
+.pk-cf-table .pk-cf-mopen { border-left: 2px solid var(--color-pk-sky); }
+.pk-cf-table .pk-cf-total { border-left: 2px solid var(--color-pk-line); }
+.dark .pk-cf-table td.pk-cf-num, .dark .pk-cf-table th.pk-cf-num { border-left-color: var(--color-base-800); }

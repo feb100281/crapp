@@ -13,17 +13,20 @@ from collections import OrderedDict
 from django.contrib import admin
 from django.shortcuts import render
 from django.urls import path, reverse
+from urllib.parse import urlencode
 from django.utils.html import format_html
-from django.db.models import Count, F, FloatField, IntegerField, OuterRef, Subquery, Sum, Value
+from django.db.models import Count, F, FloatField, IntegerField, Max, Min, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from unfold.contrib.filters.admin import RangeDateFilter
 from unfold.decorators import display
 from unfold.sections import TableSection
 
 from core.admins.badges import Badge
+from core.reports.xlsx import Book, Col, Row
 
 from ..models import CashBalance, CashBalanceDay, CashFlow
-from .common import DashboardAdmin, chart, kpi, money, money_cell, stale_status, value_filter
+from .common import (DashboardAdmin, chart, kpi, money, money2, money_cell, print_context,
+                     stale_status, value_filter)
 
 ACCOUNT_FILTERS = ("bank_name", "account_name", "currency")
 SUMS = ("bb_rub", "dt_rub", "cr_rub", "fx_diff_rub", "eb_rub")
@@ -160,6 +163,7 @@ class CashBalanceDayAdmin(DashboardAdmin):
 
     def get_urls(self):
         return [
+            path("print/", self.admin_site.admin_view(self.print_view), name="dashboard_cashbalanceday_print"),
             path(
                 "ops/<int:ba_id>/<str:date>/",
                 self.admin_site.admin_view(self.ops_view),
@@ -167,6 +171,62 @@ class CashBalanceDayAdmin(DashboardAdmin):
             ),
             *super().get_urls(),
         ]
+
+    # ------------------------------------------------------------------
+    # Печать: остатки по счетам на дату (нулевые не показываем)
+    # ------------------------------------------------------------------
+
+    def print_links(self, request):
+        flt = account_filters(request)
+        url = reverse("admin:dashboard_cashbalanceday_print")
+        return [("Печать остатков", f"{url}?{urlencode(flt)}" if flt else url)]
+
+    def print_view(self, request):
+        from datetime import date as date_type
+
+        flt = account_filters(request)
+        span = CashBalance.objects.aggregate(lo=Min("date"), hi=Max("date"))
+        if not span["hi"]:
+            return render(request, "dashboard/print_balances.html", {
+                **print_context(request, "Остатки", "Остатки денежных средств"), "groups": []})
+        try:
+            on = date_type.fromisoformat(request.GET.get("on") or "")
+        except ValueError:
+            on = span["hi"]
+        on = min(max(on, span["lo"]), span["hi"])
+
+        rows = (CashBalance.objects.filter(date=on, **flt)
+                .exclude(base_eb__range=(-0.005, 0.005))
+                .order_by("bank_name", "currency", "ba_number"))
+        groups, by_cur, total = OrderedDict(), OrderedDict(), 0.0
+        for r in rows:
+            g = groups.setdefault(r.bank_name or "Банк не указан", {"rows": [], "total": 0.0})
+            g["rows"].append({
+                "name": r.account_name if r.account_name and "…" not in r.account_name else "",
+                "number": r.ba_number,
+                "currency": r.currency or "", "eb": money2(r.base_eb),
+                "rate": "" if (r.currency or "RUB") == "RUB" else f"{r.rate:,.4f}".replace(",", " ").replace(".", ","),
+                "eb_rub": money2(r.eb_rub), "neg": (r.base_eb or 0) < 0,
+                "stale": r.stale, "stmt_to": f"{r.stmt_to:%d.%m.%Y}" if r.stmt_to else "",
+            })
+            g["total"] += r.eb_rub or 0
+            total += r.eb_rub or 0
+            by_cur[r.currency or "RUB"] = by_cur.get(r.currency or "RUB", 0.0) + (r.base_eb or 0)
+
+        scope = " · ".join(flt.values()) or "все счета"
+        ctx = print_context(request, "Остатки по счетам", f"Остатки денежных средств на {on:%d.%m.%Y}",
+                            f"{scope} · счета с ненулевым остатком")
+        ctx.update({
+            "groups": [{"bank": k, "rows": v["rows"], "total": money2(v["total"])} for k, v in groups.items()],
+            "total": money2(total),
+            "by_currency": [(c, money2(v)) for c, v in by_cur.items() if c != "RUB" or len(by_cur) > 1],
+            "count": sum(len(v["rows"]) for v in groups.values()),
+            "has_names": any(r["name"] or r["stale"] for v in groups.values() for r in v["rows"]),
+            "on": f"{on:%d.%m.%Y}", "on_iso": on.isoformat(),
+            "min_iso": span["lo"].isoformat(), "max_iso": span["hi"].isoformat(),
+            "keep": list(flt.items()),
+        })
+        return render(request, "dashboard/print_balances.html", ctx)
 
     def ops_view(self, request, ba_id: int, date: str):
         acc = CashBalance.objects.filter(ba_id=ba_id, date=date).first()
@@ -196,6 +256,92 @@ class CashBalanceDayAdmin(DashboardAdmin):
                 kpi("Остаток на конец", acc.eb_rub if acc else 0, tone="plain"),
             ],
         })
+
+    # --- выгрузка ---
+
+    DAY_HEADER = ["Дата", "Счетов", "Без свежей выписки", "Начало, ₽", "Приход, ₽",
+                  "Расход, ₽", "Курсовая, ₽", "Конец, ₽"]
+
+    @staticmethod
+    def _day_rows(queryset):
+        return [
+            [r["date"], r["n"], r["v_stale"], r["v_bb_rub"], r["v_dt_rub"],
+             -(r["v_cr_rub"] or 0), r["v_fx_diff_rub"], r["v_eb_rub"]]
+            for r in queryset.order_by("date").values(
+                "date", "n", "v_stale", "v_bb_rub", "v_dt_rub", "v_cr_rub", "v_fx_diff_rub", "v_eb_rub")
+        ]
+
+    def export_csv(self, request, queryset):
+        return self.DAY_HEADER, self._day_rows(queryset)
+
+    def export_book(self, request, queryset):
+        days = self._day_rows(queryset)
+        if not days:
+            return None
+        flt = account_filters(request)
+        first, last = days[0], days[-1]
+        scope = " · ".join(flt.values()) if flt else "все счета"
+        params = (f"Российский рубль (RUB) · период: {first[0]:%d.%m.%Y} — {last[0]:%d.%m.%Y} · {scope}")
+
+        book = Book("Остатки денежных средств", "Остатки и обороты по дням, все счета в рублях", params)
+        book.kpi("Остаток на конец", last[7], f"на {last[0]:%d.%m.%Y}")
+        book.kpi("Поступления", sum(d[4] or 0 for d in days), "за период")
+        book.kpi("Выплаты", sum(d[5] or 0 for d in days), "за период")
+        book.kpi("Курсовая разница", sum(d[6] or 0 for d in days), "переоценка валюты")
+
+        money_col = lambda title, total=False: Col(title, kind="money", width=16, total=total)  # noqa: E731
+        book.sheet(
+            "Остатки по дням", "Остатки денежных средств по дням",
+            subtitle="Сумма по счетам в рублях по курсу ЦБ на день",
+            description="День за днём: остаток на начало, приход, расход, курсовая разница, остаток на конец",
+        ).table(
+            [Col("Дата", kind="date", width=12), Col("Счетов", kind="int", width=9),
+             Col("Без свежей выписки", kind="int", width=12),
+             money_col("Начало, ₽"), money_col("Приход, ₽"), money_col("Расход, ₽"),
+             money_col("Курсовая, ₽"), money_col("Конец, ₽", True)],
+            [Row(d) for d in days],
+        )
+
+        accounts = CashBalance.objects.filter(date__gte=first[0], date__lte=last[0], **flt)
+        book.sheet(
+            "Остатки по счетам", "Остатки по счетам на конец периода",
+            subtitle=f"На {last[0]:%d.%m.%Y}: остаток в валюте счёта и в рублях",
+            description="Каждый счёт на последнюю дату: валюта, курс, остаток, дата последней выписки",
+        ).table(
+            [Col("Счёт", width=34), Col("Банк", width=30), Col("Номер счёта", kind="code", width=24),
+             Col("Валюта", width=9), Col("Курс", kind="money_dec", width=11),
+             Col("Остаток, вал.", kind="money_dec", width=18), Col("Выписка по", kind="date", width=12),
+             Col("Устарела", width=10), Col("Остаток, ₽", kind="money", width=18, total=True)],
+            [
+                Row([a.account_name, a.bank_name or "", a.ba_number, a.currency, a.rate, a.base_eb,
+                     a.stmt_to, "да" if a.stale else "", a.eb_rub], level="warn" if a.stale else None)
+                for a in accounts.filter(date=last[0]).order_by("bank_name", "account_name")
+            ],
+            total=Row(["ИТОГО", "", "", "", None, None, None, "", last[7]]),
+            note="Выделены счета, по которым нет свежей выписки — остаток перенесён с последней.",
+        )
+
+        book.sheet(
+            "Счета по дням", "Остатки по счетам по дням",
+            subtitle="Исходные строки: счёт × день",
+            description="Плоская таблица для своих сводных: счёт, день, обороты и остаток в рублях и валюте",
+        ).table(
+            [Col("Дата", kind="date", width=12), Col("Счёт", width=30), Col("Банк", width=26),
+             Col("Валюта", width=9), Col("Курс", kind="money_dec", width=11),
+             Col("Остаток, вал.", kind="money_dec", width=18),
+             money_col("Начало, ₽"), money_col("Приход, ₽"), money_col("Расход, ₽"),
+             money_col("Курсовая, ₽"), money_col("Конец, ₽", True)],
+            (
+                Row([a["date"], a["account_name"], a["bank_name"] or "", a["currency"], a["rate"],
+                     a["base_eb"], a["bb_rub"], a["dt_rub"], -(a["cr_rub"] or 0), a["fx_diff_rub"],
+                     a["eb_rub"]])
+                for a in accounts.order_by("date", "bank_name", "account_name").values(
+                    "date", "account_name", "bank_name", "currency", "rate", "base_eb",
+                    "bb_rub", "dt_rub", "cr_rub", "fx_diff_rub", "eb_rub").iterator()
+            ),
+            autofilter=True,
+        )
+        return book
 
     # --- колонки ---
 

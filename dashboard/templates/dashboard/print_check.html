@@ -1,0 +1,67 @@
+{% extends "dashboard/print_base.html" %}
+
+{% block body %}
+    {% if not accounts and not stale %}
+        <div class="ok">Все счета сходятся с банком, выписки актуальны. Запрашивать ничего не нужно.</div>
+    {% else %}
+        <p class="lead">
+            Просьба выгрузить из банк-клиента выписки, перечисленные ниже, <b>в двух форматах:
+            1С (kl_to_1c.txt) и PDF</b>, за <b>полные дни</b>: не во время рабочего дня, а когда день
+            по счёту закрыт.
+        </p>
+
+        <div class="kpis">
+            <div class="kpi"><span>Счетов с расхождением</span><b>{{ accounts|length }}</b></div>
+            <div class="kpi"><span>Расхождение, ₽</span><b class="{% if diff_neg %}neg{% endif %}">{{ diff_total }}</b></div>
+            <div class="kpi"><span>Выписки не обновлялись</span><b>{{ stale|length }}</b></div>
+            <div class="kpi"><span>Сверка на</span><b>{{ as_of }}</b></div>
+        </div>
+
+        {% if accounts %}
+            <h2>1. Остаток не сходится с банком</h2>
+            {% for a in accounts %}
+                <div class="card">
+                    <div class="card-head">
+                        <div class="card-title">{{ a.bank }} · {{ a.currency }}</div>
+                        <div class="acc">р/с {{ a.number }}</div>
+                    </div>
+                    {% if a.name %}<div class="note">{{ a.name }}</div>{% endif %}
+                    <div class="facts">
+                        <div><span>Последняя выписка</span><b>{{ a.stmt_to }}</b></div>
+                        <div><span>Остаток по банку</span><b>{{ a.bank_eb }}</b></div>
+                        <div><span>Наш расчёт</span><b>{{ a.calc_eb }}</b></div>
+                        <div><span>Расхождение</span><b class="{% if a.diff_neg %}neg{% endif %}">{{ a.diff }}</b></div>
+                    </div>
+                    <div class="label">Причина</div>
+                    <ul>{% for r in a.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+                    <div class="label">Что прислать</div>
+                    <ul class="ask">{% for x in a.asks %}<li>{{ x.0 }}{% if x.1 %}<small>{{ x.1 }}</small>{% endif %}</li>{% endfor %}</ul>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if stale %}
+            <h2>{% if accounts %}2{% else %}1{% endif %}. Выписки не обновлялись</h2>
+            <p class="lead">По этим счетам на {{ as_of }} есть остаток, а последняя загруженная выписка старше.
+                Просьба прислать выписки с указанной даты по {{ as_of }}.</p>
+            <table>
+                <thead>
+                    <tr><th>Банк</th><th>Счёт</th><th>Вал.</th><th class="num">Выписка по</th>
+                        <th class="num">Прислать с</th><th class="num">Остаток, вал.</th></tr>
+                </thead>
+                <tbody>
+                    {% for s in stale %}
+                        <tr>
+                            <td>{{ s.bank }}</td>
+                            <td class="acc">{{ s.number }}</td>
+                            <td>{{ s.currency }}</td>
+                            <td class="num">{{ s.stmt_to }}</td>
+                            <td class="num"><b>{{ s.from }}</b></td>
+                            <td class="num">{{ s.eb }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    {% endif %}
+{% endblock %}

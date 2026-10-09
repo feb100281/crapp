@@ -8,18 +8,63 @@
 
 from __future__ import annotations
 
+import re
+from datetime import date, timedelta
+
 from django.contrib import admin
-from django.db.models import Count, Q, Sum
-from django.utils.html import format_html
+from django.db.models import Count, Max, Q, Sum
+from django.shortcuts import render
+from django.urls import path, reverse
+from django.utils.html import format_html, format_html_join
 from django.utils.safestring import mark_safe
 from unfold.decorators import display
 
 from core.admins.badges import Badge
+from core.reports.xlsx import FMT_QTY, Book, Col, Row
 
-from ..models import CashCheck
-from .common import DashboardAdmin, kpi, money, money_cell, value_filter
+from ..models import CashBalance, CashCheck
+from .common import DashboardAdmin, kpi, money, money2, money_cell, print_context, value_filter
 
 OFF = Q(diff_cur__gte=0.01) | Q(diff_cur__lte=-0.01) | Q(gap_count__gt=0)
+
+# тексты разрывов из sql/bs/dashboard_load.sql (dashboard_cash_check.gaps)
+GAP_JOINT = re.compile(r"стык (\d\d)\.(\d\d)→(\d\d)\.(\d\d)\.(\d{4}): остаток (-?[\d.]+) → (-?[\d.]+)")
+GAP_HOLE = re.compile(r"(?:нет выписок )?(\d\d\.\d\d\.\d{4})–(\d\d\.\d\d\.\d{4})$")
+GAP_LINES = re.compile(r"строки ≠ итогам: (.+) \(([+-][\d.]+)\)")
+
+
+def explain(gaps: str, currency: str) -> tuple[list[str], list[tuple[str, str]]]:
+    """Разрывы из витрины → (причины, что прислать) человеческим языком."""
+    reasons, asks = [], []
+    for part in filter(None, (gaps or "").split("; ")):
+        if m := GAP_JOINT.match(part):
+            d1, m1, d2, m2, year, prev_eb, bb = m.groups()
+            y2 = int(year)
+            y1 = y2 - 1 if int(m1) > int(m2) else y2
+            day = f"{d1}.{m1}.{y1}"
+            reasons.append(
+                f"Остаток не продолжается между выписками: на конец {day} — {money2(float(prev_eb))} "
+                f"{currency}, а на начало {d2}.{m2}.{y2} — {money2(float(bb))} {currency}. "
+                f"Выписку за {day} выгрузили посреди дня, операции после выгрузки не попали."
+            )
+            asks.append((f"Выписка за {day} — полный день",
+                         "заново, после закрытия дня; прежний файл заменим"))
+        elif m := GAP_HOLE.match(part):
+            d1, d2 = m.groups()
+            reasons.append(f"Нет выписок за период {d1} — {d2}, а остаток за это время изменился.")
+            asks.append((f"Выписки с {d1} по {d2}", ""))
+        elif m := GAP_LINES.match(part):
+            name, amount = m.groups()
+            reasons.append(
+                f"В файле «{name.rsplit('/', 1)[-1]}» сумма операций не сходится с его же итогами "
+                f"на {money2(abs(float(amount)))} {currency}: в файле есть лишние или "
+                f"задвоенные документы."
+            )
+            asks.append(("Та же выписка, выгруженная заново", f"за период файла «{name.rsplit('/', 1)[-1]}»"))
+        else:
+            reasons.append(part)
+            asks.append(("Выписка за период, указанный в причине", ""))
+    return reasons, asks
 
 
 class StatusFilter(admin.SimpleListFilter):
@@ -78,21 +123,134 @@ class CashCheckAdmin(DashboardAdmin):
             '<div class="pk-mini-note pk-num">{} ₽</div>', money(obj.diff_rub, signed=True))
         return format_html("{}{}", money_cell(obj.diff_cur, signed=True), rub)
 
-    @display(description="Пропуски выписок")
+    @display(description="Разрывы в выписках")
     def gaps_display(self, obj):
         if not obj.gap_count:
             return ""
-        return format_html('<span class="pk-chip pk-chip-bad">{}</span>'
-                           '<div class="pk-mini-note">движение {} {}</div>',
-                           obj.gaps, money(obj.gap_amount, signed=True), obj.currency or "")
+        chips = format_html_join("", '<div><span class="pk-chip pk-chip-bad">{}</span></div>',
+                                 ((g,) for g in (obj.gaps or "").split("; ")))
+        return format_html('{}<div class="pk-mini-note">объясняет {} {}</div>',
+                           chips, money(obj.gap_amount, signed=True), obj.currency or "")
 
     @display(description="Статус")
     def status_display(self, obj):
         if obj.ok:
             return Badge("Сходится с банком", "check_circle", "success").badge
         if obj.gap_count:
-            return Badge("Нет выписок за период", "event_busy", "danger").badge
+            return Badge("Разрыв в выписках", "event_busy", "danger").badge
         return Badge("Расхождение", "error", "danger").badge
+
+    CHECK_HEADER = ["Счёт", "Банк", "Номер счёта", "Валюта", "Последняя выписка", "Выписок",
+                    "Остаток по банку", "Наш расчёт", "Расхождение, вал.", "Расхождение, ₽",
+                    "Разрывы в выписках", "Статус"]
+
+    @staticmethod
+    def _check_rows(queryset):
+        def status(o):
+            return "Сходится" if o.ok else ("Разрыв в выписках" if o.gap_count else "Расхождение")
+
+        return [
+            [o.account_name, o.bank_name or "", o.ba_number, o.currency, o.stmt_to, o.statements,
+             o.bank_eb, o.calc_eb, o.diff_cur, o.diff_rub, o.gaps or "", status(o)]
+            for o in queryset.order_by("id")
+        ]
+
+    def export_csv(self, request, queryset):
+        return self.CHECK_HEADER, self._check_rows(queryset)
+
+    # ------------------------------------------------------------------
+    # Печать: письмо бухгалтеру — что не сходится и какие выписки прислать
+    # ------------------------------------------------------------------
+
+    def get_urls(self):
+        return [
+            path("print/", self.admin_site.admin_view(self.print_view), name="dashboard_cashcheck_print"),
+            *super().get_urls(),
+        ]
+
+    def print_links(self, request):
+        return [("Печать для бухгалтера", reverse("admin:dashboard_cashcheck_print"))]
+
+    def print_view(self, request):
+        accounts = []
+        diff_total = 0.0
+        for o in CashCheck.objects.filter(OFF).order_by("bank_name", "ba_number"):
+            cur = o.currency or ""
+            reasons, asks = explain(o.gaps, cur)
+            if not reasons:
+                reasons = ["Расхождение не объясняется разрывами между выписками: возможно, "
+                           "не хватает выписки или в ней не все операции."]
+                asks = [("Выписка за весь период по счёту", f"по {o.stmt_to:%d.%m.%Y}" if o.stmt_to else "")]
+            diff_total += o.diff_rub or 0
+            accounts.append({
+                "bank": o.bank_name or "Банк не указан",
+                "number": o.ba_number,
+                # своё название счёта из плана счетов; собранное «Банк · RUB · …1234» не повторяем
+                "name": o.account_name if o.account_name and "…" not in o.account_name else "",
+                "currency": cur,
+                "stmt_to": f"{o.stmt_to:%d.%m.%Y}" if o.stmt_to else "—",
+                "bank_eb": f"{money2(o.bank_eb)} {cur}",
+                "calc_eb": f"{money2(o.calc_eb)} {cur}",
+                "diff": f"{money2(o.diff_cur, signed=True)} {cur}",
+                "diff_neg": (o.diff_cur or 0) < 0,
+                "reasons": reasons,
+                "asks": asks,
+            })
+
+        # счета с остатком, по которым выписка отстаёт от последнего дня
+        last = CashBalance.objects.aggregate(d=Max("date"))["d"]
+        stale = []
+        if last:
+            for b in (CashBalance.objects.filter(date=last, stale=True)
+                      .exclude(base_eb__range=(-0.005, 0.005)).order_by("bank_name", "ba_number")):
+                stale.append({
+                    "bank": b.bank_name or "", "number": b.ba_number, "currency": b.currency or "",
+                    "stmt_to": f"{b.stmt_to:%d.%m.%Y}" if b.stmt_to else "—",
+                    "from": f"{b.stmt_to + timedelta(days=1):%d.%m.%Y}" if b.stmt_to else "—",
+                    "eb": money2(b.base_eb),
+                })
+
+        as_of = f"{last:%d.%m.%Y}" if last else f"{date.today():%d.%m.%Y}"
+        ctx = print_context(
+            request, "Сверка с банком", "Запрос выписок",
+            f"Что не сходится с банком и какие выписки нужны · на {as_of}",
+        )
+        ctx.update({
+            "accounts": accounts,
+            "stale": stale,
+            "as_of": as_of,
+            "diff_total": money2(diff_total, signed=True),
+            "diff_neg": diff_total < 0,
+        })
+        return render(request, "dashboard/print_check.html", ctx)
+
+    def export_book(self, request, queryset):
+        rows = self._check_rows(queryset)
+        off = [r for r in rows if r[-1] != "Сходится"]
+        book = Book(
+            "Сверка с банком",
+            "Конечный остаток последней выписки по каждому счёту против нашего расчёта",
+            f"счетов: {len(rows)} · расходятся: {len(off)}",
+        )
+        book.kpi("Расхождение, ₽", sum(r[9] or 0 for r in rows), "расчёт минус банк")
+        book.kpi("Счетов", len(rows), "в сверке", FMT_QTY)
+        book.kpi("Расходятся", len(off), "с остатком банка", FMT_QTY)
+        book.sheet(
+            "Сверка", "Сверка с банком",
+            subtitle="Расчёт = ввод остатков + строки выписок + проводки на дату последней выписки",
+            description="По каждому счёту: остаток банка, наш расчёт, расхождение и пропуски выписок",
+        ).table(
+            [Col("Счёт", width=34), Col("Банк", width=28), Col("Номер счёта", kind="code", width=24),
+             Col("Валюта", width=9), Col("Последняя выписка", kind="date", width=13),
+             Col("Выписок", kind="int", width=10), Col("Остаток по банку", kind="money_dec", width=18),
+             Col("Наш расчёт", kind="money_dec", width=18),
+             Col("Расхождение, вал.", kind="money_dec", width=16),
+             Col("Расхождение, ₽", kind="money", width=16, total=True),
+             Col("Пропуски выписок", width=34, wrap=True), Col("Статус", width=22)],
+            [Row(r, level=None if r[-1] == "Сходится" else "warn") for r in rows],
+            note="Выделены счета с расхождением или пропусками выписок.",
+        )
+        return book
 
     def header(self, request, queryset):
         agg = queryset.aggregate(
@@ -116,23 +274,24 @@ class CashCheckAdmin(DashboardAdmin):
                 "kicker": "Контроль",
                 "title": "Сверка с банком",
                 "sub": "Конечный остаток последней выписки по каждому счёту против нашего расчёта "
-                       "на ту же дату, плюс пропуски между выписками",
+                       "на ту же дату, плюс разрывы в самих выписках",
             },
             "status": {
                 "tone": "ok" if ok else "bad",
                 "icon": "verified" if ok else "report",
                 "title": (f"Все {agg['n']} счетов сходятся с банком" if ok
                           else f"Не сходятся с банком {agg['off']} из {agg['n']} счетов"),
-                "sub": (f"Пропуски выписок по {agg['gaps']} счетам — запросите выписки за эти периоды."
+                "sub": (f"Разрывы в выписках по {agg['gaps']} счетам: остаток не продолжается между файлами "
+                         "или строки файла не бьются с его итогами — довыгрузите выписку за стык."
                         if agg["gaps"] else
-                        "Пропусков между выписками нет." if ok else
-                        "Пропусков нет — значит, расхождение внутри выписок: проверьте строки и проводки."),
+                        "Разрывов в выписках нет." if ok else
+                        "Разрывов нет — значит, расхождение в проводках ГК или вводе остатков."),
             },
             "kpis": [
                 {"label": "Счетов", "value": str(agg["n"]), "sub": f"выписки по {span}", "tone": "plain"},
                 {"label": "Расходятся", "value": str(agg["off"]), "sub": "с остатком банка",
                  "tone": "neg" if agg["off"] else "pos"},
-                {"label": "С пропусками", "value": str(agg["gaps"]), "sub": "нет выписок за период",
+                {"label": "С разрывами", "value": str(agg["gaps"]), "sub": "в самих выписках",
                  "tone": "neg" if agg["gaps"] else "pos"},
                 kpi("Расхождение, ₽", agg["diff"], "расчёт − банк", signed=True),
                 {"label": "Арифметика ДДС", "value": "ок" if arithmetic_ok else money(agg["arithmetic"]),

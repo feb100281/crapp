@@ -17,6 +17,10 @@
     110100  Выручка от реализации
     110101    СБП
     110102    Эквайринг
+
+«Принимает возвраты» (reversible) — статья берёт и встречные суммы:
+возврат комиссии банка разносится в выплаты «Комиссии банка» и
+уменьшает их. Знак в отчёте всегда по факту движения денег.
 """
 
 from __future__ import annotations
@@ -85,6 +89,14 @@ class CFItem(models.Model):
         verbose_name="Описание",
     )
 
+    reversible = models.BooleanField(
+        default=False,
+        verbose_name="Принимает возвраты",
+        help_text="Сюда можно разносить и встречные суммы: например, возврат комиссии банка "
+                  "(поступление) в статью «Комиссии банка» уменьшит выплаты по ней. "
+                  "У подстатей действует, если включено у статьи",
+    )
+
     is_active = models.BooleanField(
         default=True,
         verbose_name="Активна",
@@ -104,6 +116,14 @@ class CFItem(models.Model):
     @property
     def is_sub(self) -> bool:
         return self.parent_id is not None
+
+    @property
+    def is_reversible(self) -> bool:
+        return self.reversible or bool(self.parent_id and self.parent.reversible)
+
+    def accepts(self, direction) -> bool:
+        """Можно ли разнести сюда движение этого направления."""
+        return not direction or int(direction) == self.direction or self.is_reversible
 
     def build_code(self) -> str:
         if self.parent:

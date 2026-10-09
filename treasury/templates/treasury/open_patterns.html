@@ -1,0 +1,66 @@
+{# Неразнесённые строки резолвера: шаблон назначения → контрагенты #}
+<div class="pk-pat" x-data="{ q: '', open: {}, all(v) { for (let i = 0; i < {{ groups|length }}; i++) this.open[i] = v } }"
+     {% if find %}x-init="all(true); $el.scrollIntoView({ block: 'start' })"{% endif %}>
+    {% if find %}
+        <div class="pk-pat-found">
+            <span class="material-symbols-outlined">filter_alt</span>
+            Только «{{ find }}»: шаблонов {{ groups|length }}
+            <a href="{{ reset_url }}">показать все шаблоны</a>
+        </div>
+    {% endif %}
+    <div class="pk-pat-bar">
+        <input type="search" class="pk-input pk-pat-search" placeholder="Поиск: назначение, контрагент, ИНН"
+               x-model.debounce.150ms="q" x-on:keydown.enter.prevent>
+        <button type="button" class="pk-btn" x-on:click="all(true)">Развернуть все</button>
+        <button type="button" class="pk-btn" x-on:click="all(false)">Свернуть</button>
+        <span class="pk-cf-hint">Клик по шаблону — контрагенты</span>
+    </div>
+    <div class="pk-scroll">
+        <table class="pk-mini-table pk-pat-table">
+            <thead>
+                <tr>
+                    <th class="pk-num">Строк</th>
+                    <th class="pk-num">Сумма, ₽</th>
+                    <th class="pk-num">Контрагентов</th>
+                    <th>Шаблон назначения (наведите — пример)</th>
+                </tr>
+            </thead>
+            {% for g in groups %}
+                <tbody data-s="{{ g.search }}" x-show="!q || $el.dataset.s.includes(q.toLowerCase())">
+                    <tr class="pk-pat-row" x-on:click="open[{{ forloop.counter0 }}] = !open[{{ forloop.counter0 }}]"
+                        x-bind:class="open[{{ forloop.counter0 }}] && 'pk-pat-open'">
+                        <td class="pk-num">{{ g.count }}</td>
+                        <td class="pk-num">{{ g.amount_text }}</td>
+                        <td class="pk-num">{{ g.cp_count }}</td>
+                        <td title="{{ g.example }}">
+                            <span class="material-symbols-outlined pk-pat-chevron">chevron_right</span>
+                            {{ g.pattern|default:"(пустое назначение)" }}
+                        </td>
+                    </tr>
+                    <tr class="pk-pat-detail" x-show="open[{{ forloop.counter0 }}]" style="display: none">
+                        <td colspan="4">
+                            <table class="pk-mini-table pk-pat-cps">
+                                {% for c in g.cps %}
+                                    <tr>
+                                        <td class="pk-num">{{ c.count }}</td>
+                                        <td class="pk-num">{{ c.amount_text }}</td>
+                                        <td class="pk-pat-cp">
+                                            <b>{{ c.name|default:"—" }}</b>
+                                            {% if c.inn %}<span class="pk-field-sub">ИНН {{ c.inn }}{% if c.by_name %} · общий, по названию{% endif %}</span>{% endif %}
+                                        </td>
+                                        <td class="pk-pat-links">
+                                            <a href="{{ c.ops_url }}" target="_blank">операции</a>
+                                            {% if c.pin_url %}<a href="{{ c.pin_url }}">закрепить статью</a>{% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </table>
+                            {% if g.more %}<div class="pk-mini-note">и ещё {{ g.more }} контрагентов</div>{% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            {% endfor %}
+        </table>
+    </div>
+    {% if limited %}<div class="pk-mini-note">Показаны первые {{ limit }} шаблонов по сумме</div>{% endif %}
+</div>

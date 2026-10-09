@@ -18,6 +18,7 @@ from core.admins.badges import ChoiceBadge
 from core.admins.base_admin import AppModelAdmin, AppTabularInline
 from core.admins.fields import EMPTY
 from core.admins.sections import ChildrenSection
+from core.reports.http import csv_response, xlsx_response
 
 from ..models.gl_account_model import GLAccount, Nature, Section
 from ..services.chart import seed_chart, sync_bank_accounts
@@ -132,7 +133,7 @@ class GLAccountAdmin(AppModelAdmin):
         ("Описание", {"classes": ["tab"], "fields": ("description",)}),
     )
 
-    actions_list = ["sync_banks", "make_opening"]
+    actions_list = ["sync_banks", "make_opening", "export_xlsx", "export_csv"]
 
     def get_inlines(self, request, obj):
         if obj is None or obj.parent_id is None:
@@ -209,3 +210,16 @@ class GLAccountAdmin(AppModelAdmin):
         else:
             messages.success(request, msg)
         return redirect(reverse("admin:gl_glaccount_changelist"))
+
+    @action(description="Скачать Excel", url_path="export-xlsx", icon="download")
+    def export_xlsx(self, request: HttpRequest):
+        from ..services.exports import chart_workbook
+
+        return xlsx_response(chart_workbook(), "План счетов")
+
+    @action(description="Скачать CSV", url_path="export-csv", icon="csv")
+    def export_csv(self, request: HttpRequest):
+        from ..services.exports import chart_csv
+
+        header, rows = chart_csv()
+        return csv_response(header, rows, "План счетов")

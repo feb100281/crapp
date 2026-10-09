@@ -1,6 +1,7 @@
 """
 Общее для админок дашборда: фильтр-выпадашка по уникальным значениям поля,
-формат денег без копеек, базовый read-only класс с шапкой над списком.
+формат денег без копеек (отрицательные — в скобках), базовый read-only класс
+с шапкой над списком и выгрузкой списка в CSV / Excel.
 """
 
 from __future__ import annotations
@@ -13,6 +14,9 @@ from django.utils.html import format_html
 from unfold.contrib.filters.admin import DropdownFilter
 
 from core.admins.base_admin import AppModelAdmin
+from core.reports.http import csv_response, xlsx_response
+
+EXPORT_PARAM = "export"
 
 
 def value_filter(field: str, title: str, model=None, apply: bool = True) -> type[DropdownFilter]:
@@ -52,19 +56,45 @@ def value_filter(field: str, title: str, model=None, apply: bool = True) -> type
 
 
 def money(value, signed: bool = False) -> str:
-    """1234567.89 → «1 234 568» (неразрывные пробелы, без копеек, минус — «−»)."""
+    """1234567.89 → «1 234 568» (без копеек); отрицательное — в скобках: «(1 234 568)»."""
     if value is None:
         return "—"
-    text = f"{abs(value):,.0f}".replace(",", " ")
+    text = f"{abs(value):,.0f}".replace(",", "\u00a0")
     if round(value) < 0:
-        return "−" + text
+        return f"({text})"
     if signed and round(value) > 0:
         return "+" + text
     return text
 
 
+def money2(value, signed: bool = False) -> str:
+    """С копейками — для печатных форм: «1 234 567,89», отрицательное в скобках."""
+    if value is None:
+        return "—"
+    text = f"{abs(value):,.2f}".replace(",", "\u00a0").replace(".", ",")
+    if round(value, 2) < 0:
+        return f"({text})"
+    if signed and round(value, 2) > 0:
+        return "+" + text
+    return text
+
+
+def print_context(request, kicker: str, title: str, sub: str = "") -> dict:
+    """Общая шапка печатных форм (dashboard/print_base.html)."""
+    from django.conf import settings
+    from django.utils import timezone
+
+    return {
+        "site_title": getattr(settings, "UNFOLD", {}).get("SITE_TITLE", ""),
+        "kicker": kicker,
+        "doc_title": title,
+        "doc_sub": sub,
+        "now": timezone.localtime(),
+    }
+
+
 def money_cell(value, signed: bool = False):
-    """Сумма в ячейке: вправо, без копеек, минус — красным."""
+    """Сумма в ячейке: вправо, без копеек, отрицательная — в скобках и красным."""
     css = "pk-money pk-money-neg" if round(value or 0) < 0 else "pk-money"
     return format_html('<span class="{}">{}</span>', css, money(value, signed))
 
@@ -100,6 +130,18 @@ class DashboardAdmin(AppModelAdmin):
         """Контекст шапки: hero, kpis, status, charts. Переопределяется."""
         return {}
 
+    def export_book(self, request, queryset):
+        """Книга Excel по отфильтрованному списку (core.reports.xlsx.Book). Переопределяется."""
+        return None
+
+    def export_csv(self, request, queryset):
+        """(заголовки, строки) для CSV по отфильтрованному списку. Переопределяется."""
+        return None
+
+    def print_links(self, request) -> list[tuple[str, str]]:
+        """Кнопки печатных форм в шапке: [(подпись, адрес)]. Открываются в новой вкладке."""
+        return []
+
     def changelist_view(self, request, extra_context=None):
         # Витрину создаёт job «ДДС и переоценка», не migrate. Пока её нет —
         # понятная заглушка вместо 500.
@@ -111,10 +153,40 @@ class DashboardAdmin(AppModelAdmin):
                 "table": table,
             })
 
+        # ?export=csv|xlsx — тот же список с теми же фильтрами, но файлом
+        export = request.GET.get(EXPORT_PARAM)
+        if export:
+            request.GET = request.GET.copy()
+            request.GET.pop(EXPORT_PARAM)
+
         response = super().changelist_view(request, extra_context)
         ctx = getattr(response, "context_data", None)
-        if ctx and "cl" in ctx:
-            ctx["dash"] = self.header(request, ctx["cl"].queryset)
+        if not ctx or "cl" not in ctx:
+            return response
+
+        name = str(self.model._meta.verbose_name_plural)
+        if export == "csv":
+            data = self.export_csv(request, ctx["cl"].queryset)
+            if data:
+                return csv_response(data[0], data[1], name)
+        elif export == "xlsx":
+            book = self.export_book(request, ctx["cl"].queryset)
+            if book:
+                return xlsx_response(book, name)
+
+        dash = self.header(request, ctx["cl"].queryset)
+        if dash:
+            query = request.GET.copy()
+            query.pop("p", None)
+            prefix = "?" + query.urlencode() + ("&" if query else "")
+            exports = []
+            if type(self).export_book is not DashboardAdmin.export_book:
+                exports.append(("Excel", f"{prefix}{EXPORT_PARAM}=xlsx"))
+            if type(self).export_csv is not DashboardAdmin.export_csv:
+                exports.append(("CSV", f"{prefix}{EXPORT_PARAM}=csv"))
+            dash["exports"] = exports
+            dash["prints"] = self.print_links(request)
+        ctx["dash"] = dash
         return response
 
 

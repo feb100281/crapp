@@ -1,0 +1,6 @@
+
+/* дашборды: шапка таблицы закреплена при прокрутке */
+body:has(.pk-dash) div:has(> #result_list) { max-height: calc(100vh - 110px); overflow: auto; }
+body:has(.pk-dash) #result_list { overflow: visible; }
+body:has(.pk-dash) #result_list thead th { position: sticky; top: 0; z-index: 3; background: #fff; box-shadow: inset 0 -1px 0 var(--color-pk-line); }
+.dark body:has(.pk-dash) #result_list thead th, body.dark:has(.pk-dash) #result_list thead th { background: var(--color-base-900); }

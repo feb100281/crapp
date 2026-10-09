@@ -1,0 +1,19 @@
+/* статьи ДДС: переходы из дерева */
+.pk-cf-link { color: var(--color-pk-sky, #2f6f9f); cursor: pointer; text-decoration: none; }
+.pk-cf-link:hover { text-decoration: underline; }
+.pk-pop { position: relative; display: inline-block; }
+.pk-pop > summary { list-style: none; }
+.pk-pop > summary::-webkit-details-marker { display: none; }
+.pk-pop-body {
+    position: fixed; z-index: 60;
+    min-width: 320px; max-width: 460px; max-height: 320px; overflow: auto;
+    background: #fff; border: 1px solid #d6ddd9; border-radius: 4px;
+    box-shadow: 0 6px 18px #0000001f; padding: 4px; text-align: left; white-space: normal;
+}
+.dark .pk-pop-body { background: #1f2622; border-color: #3a453f; }
+.pk-pop-body a { display: flex; gap: 8px; align-items: baseline; padding: 5px 8px; border-radius: 3px; color: inherit; }
+.pk-pop-body a:hover { background: #1a7a5e14; }
+.pk-pop-kind { flex: none; width: 72px; font-size: 11px; color: #6b7570; }
+.pk-pop-name { flex: 1; }
+.pk-pop-n { flex: none; font-size: 11px; color: #6b7570; }
+.pk-alloc-row + .pk-alloc-row { margin-top: 4px; }

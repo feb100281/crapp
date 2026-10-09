@@ -1,0 +1,43 @@
+{# Фрагмент для модалки: операции контрагента по статье (htmx) #}
+<div class="pk-ops">
+    <div class="pk-ops-head">
+        <div class="pk-hero-kicker">{{ direction }} · {{ item_title }}</div>
+        <div class="pk-ops-title">{{ name }}</div>
+        <div class="pk-ops-sub">{% if inn %}ИНН {{ inn }} · {% endif %}операций: {{ count }} · сумма: {{ total }} ₽</div>
+    </div>
+
+    {% if rows %}
+        {% if limited %}<div class="pk-mini-note">Показаны последние {{ limit }} операций из {{ count }}.</div>{% endif %}
+        <div class="pk-scroll pk-ops-scroll">
+            <table class="pk-mini-table">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Счёт</th>
+                        <th class="pk-num">Сумма</th>
+                        <th>Статья</th>
+                        <th>Назначение платежа</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                        <tr>
+                            <td class="pk-num">{{ r.date|date:"d.m.Y" }}</td>
+                            <td>{{ r.account }}</td>
+                            <td class="pk-num">{{ r.amount_text }}</td>
+                            <td>
+                                {% if r.is_open %}<span class="pk-field-sub">не разнесено</span>
+                                {% else %}{{ r.cf_name|default:"—" }} {{ r.how }}{% endif %}
+                            </td>
+                            <td class="pk-ops-desc">{{ r.description|default:"" }}</td>
+                            <td><a href="{{ r.url }}" target="_blank" title="Открыть операцию и разнести руками">изменить</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="pk-dd-empty">Операций нет</div>
+    {% endif %}
+</div>

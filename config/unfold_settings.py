@@ -99,6 +99,11 @@ UNFOLD_SETTINGD = {
                         "icon": "fact_check",
                         "link": reverse_lazy("admin:dashboard_cashcheck_changelist"),
                     },
+                    {
+                        "title": "Контрагенты и статьи",
+                        "icon": "manage_search",
+                        "link": reverse_lazy("admin:dashboard_cpaudit_changelist"),
+                    },
                 ],
             },
             # Справочники
@@ -143,7 +148,12 @@ UNFOLD_SETTINGD = {
                     {
                         "title": "Статьи ДДС",
                         "icon": "account_tree",
-                        "link": reverse_lazy("admin:treasury_cfitem_changelist"),
+                        "link": reverse_lazy("admin:treasury_cfitem_tree"),
+                    },
+                    {
+                        "title": "Резолверы контрагентов",
+                        "icon": "person_pin",
+                        "link": reverse_lazy("admin:treasury_cpresolver_changelist"),
                     },
                     {
                         "title": "Резолверы КБК",
@@ -190,6 +200,7 @@ UNFOLD_SETTINGD = {
                 "treasury.bankaccount",
                 "treasury.cfitem",
                 "treasury.bsline",
+                "treasury.cpresolver",
                 "treasury.kbkresolver",
                 "treasury.baresolver",
                 "treasury.icresolver",
@@ -209,7 +220,11 @@ UNFOLD_SETTINGD = {
                 },
                 {
                     "title": "Статьи ДДС",
-                    "link": reverse_lazy("admin:treasury_cfitem_changelist"),
+                    "link": reverse_lazy("admin:treasury_cfitem_tree"),
+                },
+                {
+                    "title": "Резолверы контрагентов",
+                    "link": reverse_lazy("admin:treasury_cpresolver_changelist"),
                 },
                 {
                     "title": "Резолверы КБК",

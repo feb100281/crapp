@@ -1,0 +1,195 @@
+{% extends "admin/base_site.html" %}
+{% load l10n %}
+
+{% block content %}
+<div class="pk-cf-page">
+
+    {% include "dashboard/header.html" %}
+
+    {# --- панель: что показывать, направление, фильтры --- #}
+    <div class="pk-cf-toolbar">
+        <div class="pk-seg">
+            {% for code, label, url in views %}
+                <a href="{{ url }}" class="pk-seg-item{% if code == view %} pk-seg-active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+        <div class="pk-seg">
+            {% for code, label, url in directions %}
+                <a href="{{ url }}" class="pk-seg-item{% if code == params.direction or not code and not params.direction %} pk-seg-active{% endif %}">{{ label }}</a>
+            {% endfor %}
+        </div>
+        <form method="get" class="pk-cf-filters">
+            <input type="hidden" name="view" value="{{ view }}">
+            {% if params.direction %}<input type="hidden" name="dir" value="{{ params.direction }}">{% endif %}
+            <input type="search" name="q" value="{{ params.q }}" class="pk-input" placeholder="Контрагент или ИНН">
+            <select name="y" class="pk-select" onchange="this.form.submit()">
+                <option value="">Год: все</option>
+                {% for y in years %}<option value="{{ y|unlocalize }}"{% if y == params.year %} selected{% endif %}>{{ y|unlocalize }}</option>{% endfor %}
+            </select>
+            <select name="ba" class="pk-select" onchange="this.form.submit()">
+                <option value="">Счёт контрагента: все</option>
+                {% for key in bas %}<option value="{{ key }}"{% if key == params.ba %} selected{% endif %}>{{ key }}</option>{% endfor %}
+            </select>
+            <select name="item" class="pk-select" onchange="this.form.submit()">
+                <option value="">Статья: все</option>
+                {% for pk, code, name in items %}<option value="{{ pk|unlocalize }}"{% if pk == params.item_id %} selected{% endif %}>{{ code }} {{ name }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="pk-btn">Найти</button>
+            <a href="{{ reset_url }}" class="pk-seg-reset" title="Сбросить фильтры">
+                <span class="material-symbols-outlined">filter_alt_off</span>
+            </a>
+        </form>
+    </div>
+
+    <div class="pk-card pk-cf-card" x-data="{ open: {}, all(v) { for (let i = 0; i < {{ page|length }}; i++) this.open[i] = v } }">
+        <div class="pk-cf-actions">
+            <button type="button" class="pk-btn" x-on:click="all(true)">Развернуть все</button>
+            <button type="button" class="pk-btn" x-on:click="all(false)">Свернуть</button>
+            <span class="pk-cf-hint">Найдено: {{ found }} · клик по строке — статьи контрагента</span>
+            <a href="{{ export_xlsx }}" class="pk-btn"><span class="material-symbols-outlined">download</span>Excel</a>
+            <a href="{{ export_csv }}" class="pk-btn"><span class="material-symbols-outlined">download</span>CSV</a>
+        </div>
+
+        {% if not page %}
+            <div class="pk-dd-empty pk-audit-empty">Таких контрагентов нет — попробуйте другой фильтр</div>
+        {% else %}
+        <div class="pk-cf-scroll">
+            <table class="pk-cf-table pk-audit-table">
+                <thead>
+                    <tr>
+                        <th class="pk-audit-name">Контрагент</th>
+                        <th>Направление</th>
+                        <th class="pk-cf-num">Операций</th>
+                        <th class="pk-cf-num">Сумма, ₽</th>
+                        <th>Статьи</th>
+                        <th class="pk-cf-num">Не разнесено, ₽</th>
+                    </tr>
+                </thead>
+                {% for row in page %}
+                    <tbody>
+                        <tr class="pk-audit-row{% if row.suspect %} pk-audit-suspect{% endif %}"
+                            x-on:click="open[{{ forloop.counter0 }}] = !open[{{ forloop.counter0 }}]">
+                            <td class="pk-audit-name">
+                                <div class="pk-cf-label">
+                                    <span class="pk-cf-toggle" x-bind:class="open[{{ forloop.counter0 }}] && 'pk-cf-open'">
+                                        <span class="material-symbols-outlined">chevron_right</span>
+                                    </span>
+                                    <span class="pk-field-stack">
+                                        <span class="pk-audit-title" title="{{ row.name }}">{{ row.name|default:"—" }}</span>
+                                        <span class="pk-field-sub">
+                                            {% if row.mode == "inn" %}ИНН {{ row.inn }}{% else %}по названию{% if row.inn %} · ИНН {{ row.inn }} общий{% endif %}{% endif %}
+                                            {% if row.pinned %} · <b>закреплён</b>{% endif %}
+                                        </span>
+                                    </span>
+                                </div>
+                            </td>
+                            <td>{{ row.badge }}</td>
+                            <td class="pk-cf-num">{{ row.total_count }}</td>
+                            <td class="pk-cf-num">{{ row.amount_text }}</td>
+                            <td>
+                                <div class="pk-audit-chips">
+                                    {% for use in row.uses %}
+                                        <span class="pk-chip-item{% if use.rare %} pk-chip-item-rare{% endif %}" title="{% if use.article_name %}{{ use.article_code }} {{ use.article_name }} → {% endif %}{{ use.code }} {{ use.name }}">
+                                            {{ use.name }} <b>{{ use.count }}</b>
+                                        </span>
+                                    {% empty %}
+                                        <span class="pk-field-sub">не разнесён</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td class="pk-cf-num">{% if row.open_count %}{{ row.open_text }}<div class="pk-mini-note">{{ row.open_count }} стр.</div>{% endif %}</td>
+                        </tr>
+                        <tr class="pk-audit-detail" x-show="open[{{ forloop.counter0 }}]" style="display: none">
+                            <td colspan="6">
+                                <table class="pk-mini-table pk-mini-table-plain">
+                                    <thead>
+                                        <tr>
+                                            <th>Статья</th>
+                                            <th class="pk-num">Операций</th>
+                                            <th class="pk-num">Доля</th>
+                                            <th class="pk-num">Сумма, ₽</th>
+                                            <th>Период</th>
+                                            <th>Чем разнесено — открыть резолвер</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for use in row.uses %}
+                                            <tr{% if use.rare %} class="pk-audit-rare"{% endif %}>
+                                                <td>
+                                                    {% if use.article_name %}<div class="pk-audit-parent"><span class="pk-cf-code">{{ use.article_code }}</span>{{ use.article_name }}</div>{% endif %}
+                                                    <span class="pk-cf-code">{{ use.code }}</span>{{ use.name }}
+                                                    {% if use.rare %}<span class="pk-chip pk-chip-warn pk-chip-inline">редко — проверьте</span>{% endif %}
+                                                </td>
+                                                <td class="pk-num">{{ use.count }}</td>
+                                                <td class="pk-num">{{ use.share_text }}</td>
+                                                <td class="pk-num">{{ use.amount_text }}</td>
+                                                <td>{{ use.period }}</td>
+                                                <td class="pk-audit-how">
+                                                    {% for h in use.how %}
+                                                        <a href="{{ h.url }}" target="_blank" rel="noopener" class="pk-res-link{% if h.cp %} pk-res-link-cp{% endif %}">{{ h.label }} · {{ h.count }}</a>
+                                                    {% endfor %}
+                                                    {% if use.manual %}<span class="pk-field-sub">руками: {{ use.manual }}</span>{% endif %}
+                                                </td>
+                                                <td class="pk-audit-actions">
+                                                    <a href="{{ use.ops_url }}" target="_blank" rel="noopener">операции</a>
+                                                    {% if use.item_id %}
+                                                        <form method="post" action="{{ pin_action }}" class="pk-inline-form"
+                                                              onsubmit="return confirm('Все платежи контрагента «{{ row.name|escapejs }}» → «{{ use.name|escapejs }}»? Разнесённое руками не изменится.')">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="inn" value="{{ row.inn }}">
+                                                            <input type="hidden" name="name" value="{{ row.name }}">
+                                                            <input type="hidden" name="dir" value="{{ row.direction }}">
+                                                            <input type="hidden" name="cf" value="{{ use.item_id|unlocalize }}">
+                                                            <input type="hidden" name="next" value="{{ here }}">
+                                                            <button type="submit" class="pk-link-btn">всё на эту статью</button>
+                                                        </form>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                        {% if row.open_count %}
+                                            <tr>
+                                                <td><span class="pk-field-sub">Не разнесено</span></td>
+                                                <td class="pk-num">{{ row.open_count }}</td>
+                                                <td></td>
+                                                <td class="pk-num">{{ row.open_text }}</td>
+                                                <td></td>
+                                                <td class="pk-audit-how">
+                                                    {% for l in row.open_links %}
+                                                        <a href="{{ l.url }}" target="_blank" rel="noopener" class="pk-res-link">{{ l.label }} · {{ l.open }}</a>
+                                                    {% empty %}
+                                                        <span class="pk-field-sub">резолвера нет — только контрагент</span>
+                                                    {% endfor %}
+                                                </td>
+                                                <td class="pk-audit-actions">
+                                                    <a href="{{ row.open_ops_url }}" target="_blank" rel="noopener">операции</a>
+                                                </td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                                <div class="pk-audit-foot">
+                                    <span class="pk-field-sub">Настроить разноску:</span>
+                                    <a href="{{ row.pin_url }}" target="_blank" rel="noopener" class="pk-res-link pk-res-link-cp">{% if row.pinned %}резолвер контрагента{% else %}+ резолвер контрагента{% endif %}</a>
+                                    {% for l in row.links %}<a href="{{ l.url }}" target="_blank" rel="noopener" class="pk-res-link">резолвер {{ l.label }}</a>{% endfor %}
+                                    <a href="{{ row.all_ops_url }}" target="_blank" rel="noopener" class="pk-audit-all">все операции</a>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+
+        {% if prev_url or next_url %}
+            <div class="pk-cf-actions pk-pager">
+                {% if prev_url %}<a href="{{ prev_url }}" class="pk-btn">← Назад</a>{% endif %}
+                <span class="pk-cf-hint">Страница {{ page.number }} из {{ page.paginator.num_pages }}</span>
+                {% if next_url %}<a href="{{ next_url }}" class="pk-btn">Дальше →</a>{% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,4 +1,9 @@
-"""Резолверы КБК."""
+"""
+Резолверы КБК.
+
+Если для контрагента заведён свой резолвер и его правило подошло —
+строка разносится им, правила КБК её не трогают.
+"""
 
 from __future__ import annotations
 
@@ -24,11 +29,11 @@ class KbkResolverAdmin(ResolverAdminBase):
         "items_display",
     ]
 
-    search_fields = ["key", "payee", "rules__cf_item__name"]
-    search_help_text = "КБК, получатель или статья"
+    search_fields = ["key", "payee", "rules__cf_item__name", "rules__text_regex"]
+    search_help_text = "КБК, получатель, статья — или назначение из строк"
 
     readonly_fields = ["key", "direction", "payee", "lines_count", "amount_display",
-                       "open_display", "open_patterns_display"]
+                       "open_display", "open_patterns_display", "alloc_summary_display"]
 
     fieldsets = (
         (
@@ -39,6 +44,7 @@ class KbkResolverAdmin(ResolverAdminBase):
                     "payee",
                     ("lines_count", "amount_display", "open_display"),
                     "open_patterns_display",
+                    "alloc_summary_display",
                     "note",
                 ),
             },

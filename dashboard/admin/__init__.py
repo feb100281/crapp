@@ -1,3 +1,4 @@
 from .cash_flow_report_admin import CashFlowReportAdmin
 from .cash_balance_day_admin import CashBalanceDayAdmin
 from .cash_check_admin import CashCheckAdmin
+from .cp_audit_admin import CpAuditAdmin

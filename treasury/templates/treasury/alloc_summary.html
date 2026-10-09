@@ -1,0 +1,23 @@
+{# Куда сейчас разнесены строки резолвера #}
+<div class="pk-scroll pk-scroll-short">
+    <table class="pk-mini-table">
+        <thead>
+            <tr>
+                <th class="pk-num">Строк</th>
+                <th class="pk-num">Сумма, ₽</th>
+                <th>Статья</th>
+                <th>Чем разнесено</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+                <tr>
+                    <td class="pk-num">{{ r.n }}</td>
+                    <td class="pk-num">{{ r.amount_text }}</td>
+                    <td><span class="pk-cf-code">{{ r.cf_item__code }}</span>{{ r.cf_item__name }}</td>
+                    <td>{{ r.badge }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

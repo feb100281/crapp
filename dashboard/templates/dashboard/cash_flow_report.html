@@ -4,19 +4,21 @@
 {% block content %}
 <div class="pk-cf-page">
 
-    {# --- панель: годы, месяцы/кварталы, фильтры счетов --- #}
+    {# --- панель: годы / весь период, месяцы / кварталы / годы, фильтры счетов --- #}
     <div class="pk-cf-toolbar">
         <div class="pk-seg">
             {% for y in years %}
                 <a href="?{{ query }}&y={{ y|unlocalize }}" class="pk-seg-item{% if y == year %} pk-seg-active{% endif %}">{{ y|unlocalize }}</a>
             {% endfor %}
+            <a href="?{{ query }}&y=all" class="pk-seg-item{% if all_years %} pk-seg-active{% endif %}">Весь период</a>
         </div>
         <div class="pk-seg">
-            <a href="?{{ query_y }}&mode=m" class="pk-seg-item{% if mode == 'm' %} pk-seg-active{% endif %}">Месяцы</a>
-            <a href="?{{ query_y }}&mode=q" class="pk-seg-item{% if mode == 'q' %} pk-seg-active{% endif %}">Кварталы</a>
+            {% for code, label in modes %}
+                <a href="?{{ query_y }}&mode={{ code }}" class="pk-seg-item{% if mode == code %} pk-seg-active{% endif %}">{{ label }}</a>
+            {% endfor %}
         </div>
         <form method="get" class="pk-cf-filters">
-            <input type="hidden" name="y" value="{{ year|unlocalize }}">
+            <input type="hidden" name="y" value="{{ y_param|unlocalize }}">
             <input type="hidden" name="mode" value="{{ mode }}">
             {% for f in filters %}
                 <select name="{{ f.name }}" class="pk-select" onchange="this.form.submit()">
@@ -26,33 +28,49 @@
                     {% endfor %}
                 </select>
             {% endfor %}
-            <a href="?y={{ year|unlocalize }}&mode={{ mode }}" class="pk-seg-reset" title="Сбросить фильтры">
+            <a href="?y={{ y_param|unlocalize }}&mode={{ mode }}" class="pk-seg-reset" title="Сбросить фильтры">
                 <span class="material-symbols-outlined">filter_alt_off</span>
             </a>
         </form>
     </div>
 
     {% if empty %}
-        <div class="pk-dd-empty">Нет данных за {{ year|unlocalize }} по выбранным счетам</div>
+        <div class="pk-dd-empty">Нет данных за {% if all_years %}весь период{% else %}{{ year|unlocalize }}{% endif %} по выбранным счетам</div>
     {% else %}
 
         {% include "dashboard/header.html" %}
 
         {# --- сводная таблица --- #}
-        <div class="pk-card pk-cf-card" x-data='{ "open": {{ open_state|safe }} }'>
+        <div class="pk-card pk-cf-card" id="dds" x-data='{ "open": {{ open_state|safe }} }'
+             x-init="$nextTick(() => { pkCfZebra($el); pkCfFocus($el, '{{ focus|escapejs }}'); }); $watch('open', () => $nextTick(() => pkCfZebra($el)))">
             <div class="pk-cf-actions">
                 <button type="button" class="pk-seg-item"
                         x-on:click="Object.keys(open).forEach(k => open[k] = true)">Развернуть всё</button>
                 <button type="button" class="pk-seg-item"
                         x-on:click="Object.keys(open).forEach(k => open[k] = !/r/.test(k))">Свернуть статьи</button>
-                <span class="pk-cf-hint">Клик по сумме — операции за период</span>
+                <span class="pk-cf-hint">Клик по месяцу в шапке — дни · клик по сумме — операции</span>
+                {% if days_open %}<a href="{{ days_reset }}" class="pk-seg-item">Свернуть все дни</a>{% endif %}
+                <a href="?{{ query_full }}&export=xlsx" class="pk-btn"><span class="material-symbols-outlined">download</span>Excel</a>
+                <a href="?{{ query_full }}&export=csv" class="pk-btn"><span class="material-symbols-outlined">download</span>CSV</a>
             </div>
             <div class="pk-cf-scroll">
                 <table class="pk-cf-table">
                     <thead>
                         <tr>
                             <th class="pk-cf-name">Статья, ₽</th>
-                            {% for l in labels %}<th class="pk-cf-num">{{ l }}</th>{% endfor %}
+                            {% for c in columns %}
+                                {% if c.kind == "month" %}
+                                    <th class="pk-cf-num pk-cf-mhead{% if c.open %} pk-cf-mopen{% endif %}" data-code="{{ c.code }}">
+                                        <a href="{{ c.toggle }}" title="{% if c.open %}Свернуть дни{% else %}Развернуть по дням{% endif %}">
+                                            <span class="material-symbols-outlined">{% if c.open %}chevron_left{% else %}chevron_right{% endif %}</span>{{ c.label }}
+                                        </a>
+                                    </th>
+                                {% elif c.kind == "day" %}
+                                    <th class="pk-cf-num pk-cf-day">{{ c.label }}</th>
+                                {% else %}
+                                    <th class="pk-cf-num">{{ c.label }}</th>
+                                {% endif %}
+                            {% endfor %}
                             <th class="pk-cf-num pk-cf-total">Итого</th>
                         </tr>
                     </thead>
@@ -75,7 +93,7 @@
                                     </div>
                                 </th>
                                 {% for c in r.cells %}
-                                    <td class="pk-cf-num{% if c.neg %} pk-cf-neg{% endif %}">
+                                    <td class="pk-cf-num{% if c.neg %} pk-cf-neg{% endif %}{% if c.day %} pk-cf-day{% endif %}{% if c.open %} pk-cf-mopen{% endif %}">
                                         {% if c.url %}<a href="#" hx-get="{{ c.url }}" hx-target="#pk-ops-body" onclick="pkOpsOpen()">{{ c.v }}</a>{% else %}{{ c.v }}{% endif %}
                                     </td>
                                 {% endfor %}
@@ -92,4 +110,28 @@
 
 </div>
 {% if empty %}{% include "dashboard/modal.html" %}{% endif %}
+<script>
+    function pkCfZebra(root) {
+        let i = 0;
+        root.querySelectorAll("tbody tr").forEach((tr) => {
+            const leaf = tr.classList.contains("pk-cf-article") || tr.classList.contains("pk-cf-sub");
+            if (!leaf) { i = 0; tr.classList.remove("pk-cf-zebra"); return; }
+            const shown = tr.style.display !== "none";
+            tr.classList.toggle("pk-cf-zebra", shown && i++ % 2 === 1);
+        });
+    }
+    function pkCfFocus(root, code) {
+        if (!code) return;
+        const th = root.querySelector(`th[data-code="${code}"]`);
+        const box = root.querySelector(".pk-cf-scroll");
+        const name = root.querySelector("thead .pk-cf-name");
+        if (!th || !box) return;
+        const go = () => {
+            const shift = th.getBoundingClientRect().left - box.getBoundingClientRect().left;
+            box.scrollLeft = Math.max(0, box.scrollLeft + shift - (name ? name.offsetWidth : 0) - 8);
+        };
+        go();
+        setTimeout(go, 150);
+    }
+</script>
 {% endblock %}

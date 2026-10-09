@@ -1,0 +1,4 @@
+/* отчёт ДДС: зебра по статьям */
+.pk-cf-table tr.pk-cf-zebra > :not(.pk-cf-day):not(.pk-cf-mopen):not(.pk-cf-total) { background: #f5f8fa; }
+.pk-cf-table tr.pk-cf-zebra > .pk-cf-day { background: #edf3f6; }
+.dark .pk-cf-table tr.pk-cf-zebra > :not(.pk-cf-day):not(.pk-cf-mopen):not(.pk-cf-total) { background: var(--color-base-800); }

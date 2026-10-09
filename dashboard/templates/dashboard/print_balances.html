@@ -1,0 +1,50 @@
+{% extends "dashboard/print_base.html" %}
+
+{% block bar %}
+    <form method="get" style="display:flex;gap:8px;align-items:center">
+        {% for k, v in keep %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+        <label class="note">На дату</label>
+        <input type="date" name="on" value="{{ on_iso }}" min="{{ min_iso }}" max="{{ max_iso }}" onchange="this.form.submit()">
+    </form>
+{% endblock %}
+
+{% block body %}
+    <div class="kpis">
+        <div class="kpi"><span>Всего, ₽</span><b>{{ total }}</b></div>
+        {% for cur, value in by_currency %}
+            <div class="kpi"><span>В {{ cur }}</span><b>{{ value }}</b></div>
+        {% endfor %}
+        <div class="kpi"><span>Счетов с остатком</span><b>{{ count }}</b></div>
+    </div>
+
+    {% if groups %}
+        <table>
+            <thead>
+                <tr><th>Номер счёта</th>{% if has_names %}<th>Назначение</th>{% endif %}<th>Вал.</th><th class="num">Остаток, вал.</th>
+                    <th class="num">Курс ЦБ</th><th class="num">Остаток, ₽</th></tr>
+            </thead>
+            <tbody>
+                {% for g in groups %}
+                    <tr class="group"><td colspan="{% if has_names %}6{% else %}5{% endif %}">{{ g.bank }}</td></tr>
+                    {% for r in g.rows %}
+                        <tr>
+                            <td class="acc">{{ r.number }}</td>
+                            {% if has_names %}<td>{{ r.name }}{% if r.stale %}<div class="note">выписка по {{ r.stmt_to }} — остаток перенесён</div>{% endif %}</td>{% endif %}
+                            <td>{{ r.currency }}</td>
+                            <td class="num{% if r.neg %} neg{% endif %}">{{ r.eb }}</td>
+                            <td class="num">{{ r.rate }}</td>
+                            <td class="num{% if r.neg %} neg{% endif %}">{{ r.eb_rub }}</td>
+                        </tr>
+                    {% endfor %}
+                    {% if g.rows|length > 1 %}
+                        <tr class="subtotal"><td colspan="{% if has_names %}5{% else %}4{% endif %}">Итого {{ g.bank }}</td><td class="num">{{ g.total }}</td></tr>
+                    {% endif %}
+                {% endfor %}
+                <tr class="total"><td colspan="{% if has_names %}5{% else %}4{% endif %}">ИТОГО ДЕНЕЖНЫЕ СРЕДСТВА</td><td class="num">{{ total }}</td></tr>
+            </tbody>
+        </table>
+        <p class="note">Счета с нулевым остатком не показаны. Валютные остатки пересчитаны по курсу ЦБ на {{ on }}.</p>
+    {% else %}
+        <div class="ok">На {{ on }} остатков нет.</div>
+    {% endif %}
+{% endblock %}

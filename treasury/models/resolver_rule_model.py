@@ -5,13 +5,15 @@
 означает «всё остальное» и всегда проверяется последним.
 Статья должна совпадать по направлению с резолвером.
 
+У резолвера контрагента правила те же. Если ни одно не подошло
+(нет правила «всё остальное»), строку разбирает резолвер КБК или счёта.
+
 Удержанную банком комиссию / долг правило не трогает: они раскладываются
 автоматически в отчёте ДДС (sql/bs/cash_flow.sql).
 """
 
 from __future__ import annotations
 
-import re
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -58,19 +60,17 @@ class ResolverRule(models.Model):
     def clean(self):
         errors = {}
 
-        if self.text_regex:
-            try:
-                re.compile(self.text_regex, re.IGNORECASE)
-            except re.error as exc:
-                errors["text_regex"] = f"Ошибка в выражении: {exc}"
+        # «содержит» — обычный текст (скобки, точки можно) или регулярка;
+        # неправильная регулярка просто ищется как текст, ошибкой не считается
 
         if self.cf_item_id:
             if self.cf_item.children.exists():
                 errors["cf_item"] = "У статьи есть подстатьи — выберите подстатью"
-            elif self.resolver_id and self.cf_item.direction != self.resolver.direction:
+            elif self.resolver_id and not self.cf_item.accepts(self.resolver.direction):
                 errors["cf_item"] = (
                     f"Нужна статья «{self.resolver.get_direction_display()}», "
-                    f"а выбрана «{self.cf_item.get_direction_display()}»"
+                    f"а выбрана «{self.cf_item.get_direction_display()}». "
+                    f"Если это возврат — включите у статьи «Принимает возвраты»"
                 )
 
         if errors:

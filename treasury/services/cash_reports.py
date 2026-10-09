@@ -9,7 +9,8 @@
     cash_flow_check.parquet  — сверка по счетам: начало + ДДС = конец
 
 Те же данные кладутся витринами в SQLite (dashboard_cash_flow, _balance,
-_balance_day, _check) — их читает приложение dashboard.
+_balance_day, _check) — их читает приложение dashboard. Плюс витрина
+dashboard_cp_audit (sql/bs/cp_audit_mart.sql, без DuckDB).
 
 Пересчитывается целиком: после импорта выписок (bs.py), командой
 `python manage.py cashflow` и кнопкой в резолверах.
@@ -118,6 +119,12 @@ def build(log=print) -> dict:
                     "ON dashboard_cash_balance(date)")
         cur.execute("CREATE INDEX IF NOT EXISTS dashboard_cash_flow_ba_date "
                     "ON dashboard_cash_flow(ba_id, date)")
+
+    # витрина «Контрагенты и статьи» — собирается в самой SQLite
+    from dashboard.services.marts import refresh_cp_audit
+
+    refresh_cp_audit()
+    log("     витрина dashboard_cp_audit обновлена")
 
     log(f"     → {out_dir}")
     return {"days": days, "no_rate": no_rate, "bad": bad, "rows": rows,

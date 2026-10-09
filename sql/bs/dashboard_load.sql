@@ -96,19 +96,29 @@ GROUP BY date;
 -- Сверка с банком по каждому счёту:
 --   • конечный остаток последней выписки против нашего расчёта на ту же дату
 --     (расчёт = ввод остатков + все строки выписок + проводки ГК);
---   • дыры между выписками: следующая выписка начинается позже, чем
---     закончилась предыдущая, И её входящий остаток ≠ исходящему предыдущей
---     (выходные без операций дырой не считаются).
+--   • разрывы в выписках (gaps) — то, что объясняет расхождение:
+--       – стык: следующая выписка начинается позже, чем закончилась
+--         предыдущая (в т.ч. на следующий день), а её входящий остаток ≠
+--         исходящему предыдущей. Обычно выписку выгрузили посреди дня, и
+--         операции после выгрузки не попали ни в один файл;
+--       – строки ≠ итогам: сумма строк выписки не равна «Всего поступило /
+--         списано» из её же шапки (дубли, задвоенные документы в файле банка).
+--         Только для выписок, которые не пересекаются с другими по этому счёту.
+--     gap_amount — сколько расхождения (расчёт − банк) объясняют эти разрывы.
 --   • внутренняя арифметика отчёта (начало + ДДС = конец) — колонка check_rub.
 CREATE OR REPLACE TABLE target_db.dashboard_cash_check AS
 WITH st AS (
     SELECT
+        id                  AS sid,
         ba_account_id       AS ba_id,
+        source_file,
         date_from::DATE     AS df,
         date_to::DATE       AS dt,
         bb::DOUBLE          AS bb,
-        eb::DOUBLE          AS eb
-    FROM target_db.treasury_statement
+        eb::DOUBLE          AS eb,
+        t.dt::DOUBLE        AS s_in,
+        t.cr::DOUBLE        AS s_out
+    FROM target_db.treasury_statement t
     WHERE ba_account_id IS NOT NULL
 ),
 last_st AS (
@@ -123,17 +133,51 @@ seq AS (
         lag(eb) OVER (PARTITION BY ba_id ORDER BY df, dt) AS prev_eb
     FROM st
 ),
+breaks AS (
+    -- стык выписок, где остаток не продолжается
+    SELECT
+        ba_id,
+        df AS on_day,
+        CASE WHEN df = prev_to + 1
+             THEN 'стык ' || strftime(prev_to, '%d.%m') || '→' || strftime(df, '%d.%m.%Y')
+                  || ': остаток ' || printf('%.2f', prev_eb) || ' → ' || printf('%.2f', bb)
+             ELSE 'нет выписок ' || strftime(prev_to + 1, '%d.%m.%Y') || '–' || strftime(df - 1, '%d.%m.%Y')
+        END AS note,
+        prev_eb - bb AS impact
+    FROM seq
+    WHERE prev_to IS NOT NULL
+      AND df > prev_to
+      AND abs(bb - prev_eb) >= 0.01
+),
+st_lines AS (
+    SELECT statement_id AS sid, sum(dt) AS l_in, sum(cr) AS l_out
+    FROM target_db.treasury_bsline
+    GROUP BY statement_id
+),
+mismatch AS (
+    -- строки выписки не бьются с её итогами
+    SELECT
+        s.ba_id,
+        s.df AS on_day,
+        'строки ≠ итогам: ' || s.source_file || ' ('
+            || printf('%+.2f', (COALESCE(l.l_in, 0) - COALESCE(l.l_out, 0)) - (s.s_in - s.s_out)) || ')' AS note,
+        (COALESCE(l.l_in, 0) - COALESCE(l.l_out, 0)) - (s.s_in - s.s_out) AS impact
+    FROM st s
+    LEFT JOIN st_lines l ON l.sid = s.sid
+    WHERE abs((COALESCE(l.l_in, 0) - COALESCE(l.l_out, 0)) - (s.s_in - s.s_out)) >= 0.01
+      AND NOT EXISTS (
+          SELECT 1 FROM st o
+          WHERE o.ba_id = s.ba_id AND o.sid <> s.sid
+            AND o.df <= s.dt AND o.dt >= s.df
+      )
+),
 gaps AS (
     SELECT
         ba_id,
         count(*) AS gap_count,
-        string_agg(strftime(prev_to + 1, '%d.%m.%Y') || '–' || strftime(df - 1, '%d.%m.%Y'), ', '
-                   ORDER BY df) AS gaps,
-        sum(bb - prev_eb) AS gap_amount
-    FROM seq
-    WHERE prev_to IS NOT NULL
-      AND df > prev_to + 1
-      AND abs(bb - prev_eb) >= 0.01
+        string_agg(note, '; ' ORDER BY on_day) AS gaps,
+        sum(impact) AS gap_amount
+    FROM (SELECT * FROM breaks UNION ALL SELECT * FROM mismatch)
     GROUP BY ba_id
 )
 SELECT
