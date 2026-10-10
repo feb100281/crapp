@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import threading
+from urllib.parse import urlencode
+
 from django.contrib import admin
 from django.db.models import Count, Prefetch
 from django.urls import reverse
@@ -12,9 +15,11 @@ from unfold.contrib.filters.admin import (
     DropdownFilter,
     FieldTextFilter,
     RangeDateFilter,
+    RangeNumericFilter,
     RelatedDropdownFilter,
 )
-from unfold.decorators import display
+from django.shortcuts import get_object_or_404, redirect
+from unfold.decorators import action, display
 
 from core.admins.badges import Badge, ChoiceBadge
 from core.admins.base_admin import AppModelAdmin, AppTabularInline
@@ -77,12 +82,14 @@ class BSLineAllocInline(AppTabularInline):
 
 @admin.register(BSLine)
 class BSLineAdmin(AppModelAdmin):
+    _req = threading.local()
     list_display = [
         "op_date",
         "account_display",
         "direction_display",
         "amount",
-        "alloc_display",
+        "article_display",
+        "resolver_display",
         "cp_display",
         "ba_resolver",
         "description_display",
@@ -90,11 +97,15 @@ class BSLineAdmin(AppModelAdmin):
 
     list_display_links = ["op_date", "amount"]
 
-    search_fields = ["description", "cp_name", "inn_adjust", "cp_ba", "kbk"]
-    search_help_text = "Назначение, контрагент, ИНН, счёт или КБК"
+    search_fields = ["description", "cp_name", "inn_adjust", "cp_ba", "kbk", "allocs__cf_item__name"]
+    search_help_text = "Назначение, контрагент, ИНН, счёт, КБК или статья ДДС. Сумма и даты — в фильтрах"
+
+    actions_detail = ["cp_resolver_detail"]
+    date_hierarchy = "op_date"          # год → месяц → день над таблицей
 
     list_filter = [
         ("op_date", RangeDateFilter),
+        ("amount", RangeNumericFilter),
         ("direction", ChoicesDropdownFilter),
         ("ba_resolver", FieldTextFilter),
         ("ba_account", RelatedDropdownFilter),
@@ -194,7 +205,7 @@ class BSLineAdmin(AppModelAdmin):
             .annotate(alloc_count=Count("allocs"))
             .prefetch_related(Prefetch(
                 "allocs",
-                queryset=BSLineAlloc.objects.select_related("cf_item", "resolver_rule__resolver"),
+                queryset=BSLineAlloc.objects.select_related("cf_item", "cf_item__parent", "resolver_rule__resolver"),
             ))
         )
 
@@ -225,6 +236,67 @@ class BSLineAdmin(AppModelAdmin):
     def description_display(self, obj: BSLine):
         text = obj.description or ""
         return Stack(text[:70] + ("…" if len(text) > 70 else "")).html if text else EMPTY
+
+    @display(description="Статья ДДС", ordering="alloc_count")
+    def article_display(self, obj: BSLine):
+        """Статья → подстатья, куда разнесена строка (по каждой разноске)."""
+        if not obj.alloc_count:
+            return Badge("Не разнесено", "help", "warning").badge
+        rows = []
+        for a in obj.allocs.all():
+            item = a.cf_item
+            if item is None:
+                rows.append(("", "без статьи"))
+                continue
+            parent = item.parent.name if item.parent_id and item.parent else ""
+            rows.append((parent, f"{item.code} {item.name}"))
+        return format_html_join("", '<div class="pk-alloc-row" style="min-width:210px">'
+                                    '<div class="pk-mini-note">{}</div><div>{}</div></div>', rows)
+
+    @display(description="Как разнесено")
+    def resolver_display(self, obj: BSLine):
+        parts = []
+        for a in obj.allocs.all():
+            res = a.resolver_rule.resolver if a.resolver_rule_id and a.resolver_rule else None
+            if res:
+                url = reverse(f"admin:treasury_{RESOLVER_ADMIN.get(res.kind, 'resolver')}_change",
+                              args=[res.pk])
+                parts.append(format_html('<a href="{}" target="_blank" rel="noopener" class="pk-cf-link" '
+                                         'title="Открыть резолвер в новой вкладке">{} ↗</a>', url, res.name or res.key))
+            else:
+                parts.append("руками" if a.manual else "—")
+        has_cp = any(a.resolver_rule_id and a.resolver_rule and a.resolver_rule.resolver.kind == "CP"
+                     for a in obj.allocs.all())
+        if not obj.intercompany and not has_cp and (obj.inn_adjust or obj.cp_name):
+            # резолвер контрагента по этой строке: откроет существующий или форму нового
+            url = self._pin_url(obj, getattr(self._req, "path", ""))
+            parts.append(format_html('<a href="{}" class="pk-cf-link" title="Резолвер контрагента '
+                                     '{} — {}">＋ резолвер</a>', url, obj.inn_adjust or "без ИНН",
+                                     obj.get_direction_display().lower()))
+        if not parts:
+            return EMPTY
+        return format_html_join("", '<div class="pk-mini-note">{}</div>', ((p,) for p in parts))
+
+    @staticmethod
+    def _pin_url(obj: BSLine, back: str = "") -> str:
+        """Резолвер контрагента по строке: существующий или форма нового (ИНН, название, направление)."""
+        query = {"inn": obj.inn_adjust or "", "name": (obj.cp_name or "")[:200], "dir": obj.direction}
+        if back:
+            query["next"] = back
+        return reverse("admin:treasury_cpresolver_pin") + "?" + urlencode(query)
+
+    @action(description="Резолвер контрагента", url_path="cp-resolver", icon="rule")
+    def cp_resolver_detail(self, request, object_id):
+        obj = get_object_or_404(BSLine, pk=object_id)
+        if obj.intercompany or not (obj.inn_adjust or obj.cp_name):
+            self.message_user(request, "У перевода между своими счетами или строки без контрагента "
+                                       "резолвера контрагента нет", level="warning")
+            return redirect(reverse("admin:treasury_bsline_change", args=[object_id]))
+        return redirect(self._pin_url(obj, reverse("admin:treasury_bsline_change", args=[object_id])))
+
+    def changelist_view(self, request, extra_context=None):
+        self._req.path = request.get_full_path()      # куда вернуться после резолвера
+        return super().changelist_view(request, extra_context)
 
     @display(description="Разноска · резолвер", ordering="alloc_count")
     def alloc_display(self, obj: BSLine):

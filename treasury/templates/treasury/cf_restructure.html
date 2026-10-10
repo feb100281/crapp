@@ -75,8 +75,12 @@
             <label for="id_target">С какой статьёй объединить</label>
             <select name="target" id="id_target" class="pk-select pk-select-wide">
                 <option value="">— выберите статью —</option>
-                {% for item in form.fields.target.queryset %}
-                    <option value="{{ item.pk }}"{% if form.target.value|stringformat:"s" == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.code }} · {% if item.parent %}{{ item.parent.name }} → {% endif %}{{ item.name }}</option>
+                {% for group in form.target_groups %}
+                    <optgroup label="{{ group.label }}">
+                    {% for item in group.items %}
+                        <option value="{{ item.pk }}"{% if form.target.value|stringformat:"s" == item.pk|stringformat:"s" %} selected{% endif %}>{{ item.code }} · {% if item.parent %}{{ item.parent.name }} → {% endif %}{{ item.name }}</option>
+                    {% endfor %}
+                    </optgroup>
                 {% endfor %}
             </select>
             {{ form.target.errors }}
@@ -85,7 +89,8 @@
                 <span>{{ form.delete_source.label }}</span>
             </label>
             <p class="pk-form-help">Все правила, разнесённые строки и проводки перейдут на выбранную статью.
-                Отменить объединение нельзя.</p>
+                Отменить объединение нельзя. Статьи другого направления есть в списке, если у них или у исходной
+                стоит «Принимает возвраты»: после объединения в одной статье будут и плюсы, и минусы.</p>
         </div>
 
         <label class="pk-form-check">

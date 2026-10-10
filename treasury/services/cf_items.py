@@ -165,11 +165,17 @@ def merge(item: CFItem, target: CFItem, delete: bool = True) -> list[str]:
         raise ValidationError(f"У «{target}» есть подстатьи — выберите подстатью")
     if target.parent_id == item.pk:
         raise ValidationError(f"«{target}» — подстатья «{item}»: сначала вынесите её отдельно")
+    log = []
     if item.direction != target.direction:
-        raise ValidationError(
-            f"«{item}» — {item.get_direction_display().lower()}, а «{target}» — "
-            f"{target.get_direction_display().lower()}: направление должно совпадать"
-        )
+        if not (target.is_reversible or item.is_reversible):
+            raise ValidationError(
+                f"«{item}» — {item.get_direction_display().lower()}, а «{target}» — "
+                f"{target.get_direction_display().lower()}: отметьте у одной из них «Принимает возвраты»"
+            )
+        if not target.is_reversible:
+            target.reversible = True
+            target.save(update_fields=["reversible"])
+            log.append(f"{target.code} {target.name} — теперь принимает возвраты (плюс и минус)")
 
     sources = [item] + (list(item.children.all()) if not item.parent_id else [])
     ids = [s.pk for s in sources]
@@ -177,8 +183,8 @@ def merge(item: CFItem, target: CFItem, delete: bool = True) -> list[str]:
     rules = ResolverRule.objects.filter(cf_item__in=ids).update(cf_item=target)
     allocs = BSLineAlloc.objects.filter(cf_item__in=ids).update(cf_item=target)
     journal = _journal_lines().filter(cf_item__in=ids).update(cf_item=target)
-    log = [f"{item.code} {item.name} → {target.code} {target.name}: "
-           f"правил {rules}, строк {allocs}, проводок {journal}"]
+    log.insert(0, f"{item.code} {item.name} → {target.code} {target.name}: "
+                  f"правил {rules}, строк {allocs}, проводок {journal}")
 
     if delete:
         for source in reversed(sources):   # сначала подстатьи

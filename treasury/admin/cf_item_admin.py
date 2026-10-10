@@ -200,9 +200,26 @@ class RestructureForm(forms.Form):
         ids = [i.pk for i in items]
         same = CFItem.objects.filter(direction=direction, is_active=True).exclude(pk__in=ids)
         self.fields["parent"].queryset = same.filter(parent__isnull=True).order_by("code")
+        # объединить можно и со статьёй другого направления, если она (или исходная) принимает возвраты
+        other = Q(direction=direction)
+        if any(i.is_reversible for i in items):
+            other = Q()
+        else:
+            other |= Q(reversible=True) | Q(parent__reversible=True)
         self.fields["target"].queryset = (
-            same.filter(children__isnull=True).exclude(parent_id__in=ids).order_by("code")
+            CFItem.objects.filter(other, is_active=True, children__isnull=True)
+            .exclude(pk__in=ids).exclude(parent_id__in=ids)
+            .select_related("parent").order_by("direction", "code")
         )
+        self.direction = direction
+        # другое направление — первым блоком, чтобы не искать в конце длинного списка
+        targets = list(self.fields["target"].queryset)
+        name = dict(Direction.choices)
+        self.target_groups = [g for g in (
+            {"label": f"{name.get(3 - direction, '')} — принимают возвраты (±)",
+             "items": [t for t in targets if t.direction != direction]},
+            {"label": name.get(direction, ""), "items": [t for t in targets if t.direction == direction]},
+        ) if g["items"]]
         self.fields["activity"].initial = items[0].activity
 
     def clean(self):
