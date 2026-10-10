@@ -1,0 +1,160 @@
+{% load i18n static %}<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вход · {{ site_title|default:"COSMORELAX" }}</title>
+<link href="{% static 'unfold/fonts/inter/styles.css' %}" rel="stylesheet">
+<link href="{% static 'unfold/fonts/material-symbols/styles.css' %}" rel="stylesheet">
+<style>
+    :root {
+        --navy: #18324A; --navy-dark: #102436; --blue: #2F6B8A; --sky: #6D97AC; --pale: #EAF1F5;
+        --ink: #1D2935; --muted: #6B7A87; --line: #D8E1E7; --gold: #B8862E; --fall: #B54A3F;
+        --bg: #F4F8FA; --card: #fff;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root { --ink: #E6EDF2; --muted: #93A3B1; --line: #2A3A48; --bg: #0B1A28; --card: #102436; --pale: #13293D; }
+    }
+    * { box-sizing: border-box; }
+    .material-symbols-outlined { font-family: "Material Symbols Outlined"; font-weight: normal; font-style: normal; font-size: 20px;
+        line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap;
+        direction: ltr; font-feature-settings: "liga"; -webkit-font-smoothing: antialiased; }
+    html, body { height: 100%; margin: 0; }
+    body { font: 15px/1.5 Inter, -apple-system, "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--bg);
+           display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+
+    .brand { position: relative; overflow: hidden; background: radial-gradient(120% 90% at 0% 0%, #22466A 0%, var(--navy) 45%, var(--navy-dark) 100%);
+             color: #fff; padding: 48px 56px; display: flex; flex-direction: column; justify-content: space-between;
+             border-right: 3px solid var(--gold); }
+    .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: .14em; font-size: 14px; }
+    .logo i { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, var(--gold), #D8A85A);
+              display: grid; place-items: center; font-style: normal; color: var(--navy-dark); font-size: 18px; }
+    .hello { max-width: 460px; position: relative; z-index: 1; }
+    .kicker { color: var(--gold); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; }
+    .hello h1 { font-size: 40px; line-height: 1.12; margin: 12px 0 14px; font-weight: 700; }
+    .hello p { color: #B9CBD8; margin: 0; font-size: 16px; }
+    .points { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 12px; }
+    .points li { display: flex; gap: 12px; align-items: center; color: #DCE6EE; font-size: 14px; }
+    .points .material-symbols-outlined { color: var(--gold); font-size: 20px; }
+    .foot { color: #7F98AC; font-size: 12px; position: relative; z-index: 1; }
+    .chart { position: absolute; right: -40px; bottom: 70px; width: 78%; opacity: .55; pointer-events: none; }
+    .chart path.line { stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: draw 2.4s ease-out .3s forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @media (prefers-reduced-motion: reduce) { .chart path.line { animation: none; stroke-dashoffset: 0; } }
+
+    .side { display: flex; align-items: center; justify-content: center; padding: 40px 24px; }
+    .card { width: 100%; max-width: 380px; }
+    .card h2 { font-size: 26px; margin: 0 0 6px; }
+    .card .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 6px; letter-spacing: .02em; }
+    .field { position: relative; margin-bottom: 16px; }
+    .field .material-symbols-outlined { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 20px; }
+    input[type=text], input[type=password] { width: 100%; height: 46px; padding: 0 44px; border: 1px solid var(--line); border-radius: 8px;
+             font: inherit; color: var(--ink); background: var(--card); outline: none; transition: border-color .15s, box-shadow .15s; }
+    input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #2F6B8A26; }
+    .eye { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: 0; cursor: pointer;
+           color: var(--muted); padding: 6px; display: grid; }
+    .eye .material-symbols-outlined { position: static; transform: none; }
+    button.go { width: 100%; height: 48px; margin-top: 10px; border: 0; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600;
+                color: #fff; background: var(--navy); display: flex; align-items: center; justify-content: center; gap: 8px;
+                transition: background .15s, transform .1s; }
+    button.go:hover { background: var(--blue); }
+    button.go:active { transform: translateY(1px); }
+    @media (prefers-color-scheme: dark) { button.go { background: var(--blue); } button.go:hover { background: var(--sky); } }
+    .error { background: #B54A3F14; border: 1px solid #B54A3F55; color: var(--fall); padding: 10px 12px; border-radius: 8px;
+             font-size: 13px; margin-bottom: 18px; display: flex; gap: 8px; }
+    .meta { margin-top: 28px; font-size: 12px; color: var(--muted); text-align: center; }
+
+    @media (max-width: 860px) {
+        body { grid-template-columns: 1fr; }
+        .brand { padding: 28px 24px; border-right: 0; border-bottom: 3px solid var(--gold); min-height: 0; }
+        .hello h1 { font-size: 28px; }
+        .points, .chart, .foot { display: none; }
+    }
+</style>
+</head>
+<body>
+<section class="brand">
+    <div class="logo"><i>₽</i>{{ site_title|default:"COSMORELAX" }}</div>
+
+    <div class="hello">
+        <div class="kicker">Казначейство · ДДС</div>
+        <h1><span id="greet">Здравствуйте</span>!</h1>
+        <p>Деньги компании в одном месте: выписки, остатки и движение денежных средств.</p>
+        <ul class="points">
+            <li><span class="material-symbols-outlined">account_balance</span>Остатки по всем банкам на любую дату</li>
+            <li><span class="material-symbols-outlined">monitoring</span>Отчёт ДДС по статьям, месяцам и дням</li>
+            <li><span class="material-symbols-outlined">verified</span>Сверка с банком и запрос недостающих выписок</li>
+        </ul>
+    </div>
+
+    <svg class="chart" viewBox="0 0 600 220" fill="none" aria-hidden="true">
+        <defs>
+            <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#6D97AC" stop-opacity=".35"/>
+                <stop offset="1" stop-color="#6D97AC" stop-opacity="0"/>
+            </linearGradient>
+        </defs>
+        <path d="M0 190 L60 170 L120 176 L180 140 L240 150 L300 112 L360 120 L420 84 L480 92 L540 52 L600 30 L600 220 L0 220 Z" fill="url(#fill)"/>
+        <path class="line" d="M0 190 L60 170 L120 176 L180 140 L240 150 L300 112 L360 120 L420 84 L480 92 L540 52 L600 30" stroke="#B8862E" stroke-width="2.5" stroke-linejoin="round"/>
+    </svg>
+
+    <div class="foot">© {% now "Y" %} {{ site_title|default:"COSMORELAX" }} · Управленческий дашборд</div>
+</section>
+
+<main class="side">
+    <div class="card">
+        <h2>Вход</h2>
+        <p class="sub">Введите логин и пароль, чтобы продолжить</p>
+
+        {% if form.errors or form.non_field_errors %}
+            <div class="error"><span class="material-symbols-outlined">error</span>
+                <span>{% if form.non_field_errors %}{% for e in form.non_field_errors %}{{ e }} {% endfor %}{% else %}Проверьте логин и пароль.{% endif %}</span>
+            </div>
+        {% endif %}
+        {% if user.is_authenticated %}
+            <div class="error"><span class="material-symbols-outlined">lock</span>
+                <span>Вы вошли как {{ user.get_username }}, но у этой учётной записи нет доступа к странице.</span>
+            </div>
+        {% endif %}
+
+        <form action="{{ app_path }}" method="post" id="login-form">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <div class="field">
+                <label for="id_username">Логин</label>
+                <div style="position:relative">
+                    <span class="material-symbols-outlined">person</span>
+                    <input type="text" name="username" id="id_username" autocomplete="username" autocapitalize="none"
+                           value="{{ form.username.value|default:'' }}" required autofocus>
+                </div>
+            </div>
+            <div class="field">
+                <label for="id_password">Пароль</label>
+                <div style="position:relative">
+                    <span class="material-symbols-outlined">lock</span>
+                    <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+                    <button type="button" class="eye" aria-label="Показать пароль"
+                            onclick="const p=document.getElementById('id_password');p.type=p.type==='password'?'text':'password';this.firstElementChild.textContent=p.type==='password'?'visibility':'visibility_off'">
+                        <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                </div>
+            </div>
+            <button type="submit" class="go">Войти <span class="material-symbols-outlined">arrow_forward</span></button>
+        </form>
+
+        <div class="meta" id="today"></div>
+    </div>
+</main>
+
+<script>
+    (() => {
+        const h = new Date().getHours();
+        document.getElementById("greet").textContent =
+            h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
+        document.getElementById("today").textContent = new Date().toLocaleDateString("ru-RU",
+            { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    })();
+</script>
+</body>
+</html>

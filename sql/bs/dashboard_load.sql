@@ -104,6 +104,7 @@ GROUP BY date;
 --       – строки ≠ итогам: сумма строк выписки не равна «Всего поступило /
 --         списано» из её же шапки (дубли, задвоенные документы в файле банка).
 --         Только для выписок, которые не пересекаются с другими по этому счёту.
+--       – закрытый счёт с ненулевым остатком на дату закрытия.
 --     gap_amount — сколько расхождения (расчёт − банк) объясняют эти разрывы.
 --   • внутренняя арифметика отчёта (начало + ДДС = конец) — колонка check_rub.
 CREATE OR REPLACE TABLE target_db.dashboard_cash_check AS
@@ -171,13 +172,25 @@ mismatch AS (
             AND o.df <= s.dt AND o.dt >= s.df
       )
 ),
+closed AS (
+    -- счёт закрыт, а остаток на дату закрытия не нулевой
+    SELECT
+        a.id AS ba_id,
+        a.closed_on::DATE AS on_day,
+        'закрыт ' || strftime(a.closed_on::DATE, '%d.%m.%Y') || ' с остатком ' || printf('%.2f', c.base_eb) AS note,
+        0.0 AS impact
+    FROM target_db.treasury_bankaccount a
+    JOIN cash_reval c ON c.ba_id = a.id AND c.date = a.closed_on::DATE
+    WHERE a.closed_on IS NOT NULL
+      AND abs(c.base_eb) >= 0.01
+),
 gaps AS (
     SELECT
         ba_id,
         count(*) AS gap_count,
         string_agg(note, '; ' ORDER BY on_day) AS gaps,
         sum(impact) AS gap_amount
-    FROM (SELECT * FROM breaks UNION ALL SELECT * FROM mismatch)
+    FROM (SELECT * FROM breaks UNION ALL SELECT * FROM mismatch UNION ALL SELECT * FROM closed)
     GROUP BY ba_id
 )
 SELECT

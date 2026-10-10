@@ -10,6 +10,7 @@ from unfold.contrib.filters.admin import ChoicesDropdownFilter
 from unfold.decorators import display
 from unfold.sections import TableSection
 
+from core.admins.badges import Badge
 from core.admins.base_admin import AppModelAdmin, AppTabularInline
 from core.admins.fields import FirstCol
 
@@ -25,7 +26,7 @@ class BankAccountInline(AppTabularInline):
 
     model = BankAccount
     fk_name = "gr"
-    fields = ["number", "currency", "bank", "ba_type"]
+    fields = ["number", "currency", "bank", "ba_type", "closed_on"]
     autocomplete_fields = ["bank"]
 
 
@@ -45,6 +46,21 @@ class StatementsSection(TableSection):
     ]
 
 
+class ClosedFilter(admin.SimpleListFilter):
+    title = "Состояние"
+    parameter_name = "state"
+
+    def lookups(self, request, model_admin):
+        return [("open", "Открытые"), ("closed", "Закрытые")]
+
+    def queryset(self, request, queryset):
+        if self.value() == "open":
+            return queryset.filter(closed_on__isnull=True)
+        if self.value() == "closed":
+            return queryset.filter(closed_on__isnull=False)
+        return queryset
+
+
 @admin.register(BankAccount)
 class BankAccountAdmin(AppModelAdmin):
     list_display = [
@@ -52,6 +68,7 @@ class BankAccountAdmin(AppModelAdmin):
         "currency",
         "statements_count",
         "ba_type",
+        "state_display",
         "owner_display",
     ]
 
@@ -71,7 +88,7 @@ class BankAccountAdmin(AppModelAdmin):
 
     search_help_text = "Номер счёта, банк или владелец"
 
-    list_filter = [("ba_type", ChoicesDropdownFilter)]
+    list_filter = [ClosedFilter, ("ba_type", ChoicesDropdownFilter)]
 
     autocomplete_fields = ["gr", "bank"]
 
@@ -83,7 +100,7 @@ class BankAccountAdmin(AppModelAdmin):
                     "number",
                     "gr",
                     ("bank", "currency"),
-                    "ba_type",
+                    ("ba_type", "closed_on"),
                 ),
             },
         ),
@@ -104,6 +121,12 @@ class BankAccountAdmin(AppModelAdmin):
             obj.number,
             avatar_url,
         ).avatar_name_subtext
+
+    @display(description="Состояние", ordering="closed_on")
+    def state_display(self, obj: BankAccount):
+        if obj.closed_on:
+            return Badge(f"Закрыт с {obj.closed_on:%d.%m.%Y}", "lock", "gray").badge
+        return Badge("Открыт", "check", "success").badge
 
     @display(description="Владелец", ordering="gr__name")
     def owner_display(self, obj: BankAccount):

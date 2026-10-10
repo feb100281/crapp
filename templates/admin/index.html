@@ -17,7 +17,7 @@
     <div class="pk-hero">
         <div class="pk-hero-kicker">COSMORELAX · Управленческий дашборд</div>
         <h1 class="pk-hero-title">
-            Добро пожаловать,
+            <span id="pk-greet">Добро пожаловать</span>,
             <span class="pk-hero-accent">{{ request.user.first_name|default:request.user.username }}</span>!
         </h1>
         <p class="pk-hero-sub">
@@ -92,7 +92,7 @@
                     <div class="pk-dash-card-value pk-kpi-neg">{{ cards.off }} из {{ cards.checked }}</div>
                     <div class="pk-dash-card-sub">счетов не сходятся с остатком последней выписки</div>
                     {% if cards.gaps %}
-                        <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">event_busy</span>нет выписок за период: {{ cards.gaps }} счетов</span>
+                        <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">event_busy</span>разрывы в выписках: {{ cards.gaps }} счетов</span>
                     {% else %}
                         <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">report</span>нужна проверка</span>
                     {% endif %}
@@ -150,4 +150,11 @@
     </div>
 
 </div>
+<script>
+    (() => {
+        const h = new Date().getHours();
+        const el = document.getElementById("pk-greet");
+        if (el) el.textContent = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
+    })();
+</script>
 {% endblock %}

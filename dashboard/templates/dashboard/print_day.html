@@ -1,0 +1,81 @@
+{% extends "dashboard/print_base.html" %}
+
+{% block bar %}
+    {% if not pdf %}
+        <form method="get" style="display:flex;gap:8px;align-items:center">
+            {% for k, v in keep %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+            <label class="note">Дата</label>
+            <input type="date" name="on" value="{{ on_iso }}" onchange="this.form.submit()">
+        </form>
+        <a href="{{ pdf_url }}">Скачать PDF</a>
+        <a href="{{ xlsx_url }}">Скачать Excel</a>
+    {% endif %}
+{% endblock %}
+
+{% block body %}
+    <div class="kpis">
+        <div class="kpi"><span>Остаток на начало</span><b>{{ r.opening_t }}</b></div>
+        <div class="kpi"><span>Поступления</span><b>{{ r.inflow_t }}</b></div>
+        <div class="kpi"><span>Выплаты</span><b class="neg">{{ r.outflow_t }}</b></div>
+        <div class="kpi"><span>Остаток на конец</span><b>{{ r.closing_t }}</b></div>
+    </div>
+
+    {% if r.empty %}
+        <div class="ok">За {{ r.date|date:"d.m.Y" }} движения нет.</div>
+    {% else %}
+        <table class="day">
+            <thead>
+                <tr><th>Статья / контрагент</th><th class="num">Операций</th><th class="num">Сумма, ₽</th></tr>
+            </thead>
+            <tbody>
+                <tr class="band"><td>ОСТАТОК НА НАЧАЛО ДНЯ</td><td></td><td class="num">{{ r.opening_t }}</td></tr>
+
+                {% for s in r.blocks %}
+                    <tr class="sec"><td>{{ s.title }}</td><td class="num">{{ s.count }}</td><td class="num{% if s.neg %} neg{% endif %}">{{ s.total_t }}</td></tr>
+                    {% for a in s.articles %}
+                        <tr class="art">
+                            <td><span class="code">{{ a.code }}</span>{{ a.name }}</td>
+                            <td class="num">{{ a.count }}</td>
+                            <td class="num{% if a.neg %} neg{% endif %}">{{ a.total_t }}</td>
+                        </tr>
+                        {% for c in a.rows %}
+                            <tr class="cp">
+                                <td>{{ c.name }}{% if c.inn or c.sub %}<div class="note">{% if c.inn %}ИНН {{ c.inn }}{% endif %}{% if c.inn and c.sub %} · {% endif %}{{ c.sub }}</div>{% endif %}</td>
+                                <td class="num">{{ c.count }}</td>
+                                <td class="num{% if c.neg %} neg{% endif %}">{{ c.amount_t }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                {% endfor %}
+
+                {% if r.fx_t %}
+                    <tr class="sec"><td>Курсовая разница</td><td></td><td class="num{% if r.fx_neg %} neg{% endif %}">{{ r.fx_t }}</td></tr>
+                {% endif %}
+                {% if r.openings_t %}
+                    <tr class="sec"><td>Ввод остатков</td><td></td><td class="num">{{ r.openings_t }}</td></tr>
+                {% endif %}
+
+                <tr class="band"><td>ОСТАТОК НА КОНЕЦ ДНЯ</td><td></td><td class="num">{{ r.closing_t }}</td></tr>
+            </tbody>
+        </table>
+        <p class="note">
+            {% if r.check_ok %}Проверка: остаток на начало + движение за день = остаток на конец.
+            {% else %}Внимание: начало + движение не равно концу на {{ r.check_t }} ₽ — пересчитайте ДДС.{% endif %}
+            Суммы в рублях по курсу ЦБ на день. Внутригрупповые операции — переводы между своими счетами,
+            депозиты и конвертация — показаны отдельно и не входят в поступления и выплаты.
+        </p>
+    {% endif %}
+
+    <style>
+        .kpi b.neg { color: var(--fall); }
+        table.day td { padding: 4px 7px; }
+        table.day tbody tr:nth-child(even) td { background: transparent; }
+        tr.band td { background: var(--navy) !important; color: #fff; font-weight: 700; padding: 7px; }
+        tr.sec td { background: var(--pale) !important; font-weight: 700; color: var(--navy); border-top: 1px solid var(--sky); }
+        tr.art td { font-weight: 600; background: var(--pale-soft) !important; }
+        tr.art .code { color: var(--muted); font-weight: 400; font-size: 10px; margin-right: 6px; }
+        tr.cp td:first-child { padding-left: 22px; }
+        tr.cp td { color: var(--ink); }
+        @media print { tr.band td, tr.sec td, tr.art td { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    </style>
+{% endblock %}

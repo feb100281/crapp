@@ -1,0 +1,43 @@
+{% extends "dashboard/print_base.html" %}
+
+{% block body %}
+    <div class="kpis">
+        <div class="kpi"><span>Мы заплатили</span><b class="neg">{{ paid_t }}</b></div>
+        <div class="kpi"><span>Нам заплатили</span><b>{{ got_t }}</b></div>
+        <div class="kpi"><span>Итого</span><b>{{ net_t }}</b></div>
+        <div class="kpi"><span>Операций</span><b>{{ r.count }}</b></div>
+    </div>
+    {% if r.aliases %}<p class="note">Другие написания в выписках: {{ r.aliases|join:"; " }}</p>{% endif %}
+
+    {% if not r.count %}
+        <div class="ok">За период платежей нет.</div>
+    {% else %}
+        <h2>По статьям</h2>
+        <table>
+            <thead><tr><th>Статья</th><th class="num">Операций</th><th class="num">Сумма, ₽</th></tr></thead>
+            <tbody>
+                {% for a in arts %}
+                    <tr><td>{% if a.code %}<span class="note">{{ a.code }}</span> {% endif %}{{ a.name }}</td>
+                        <td class="num">{{ a.n }}</td><td class="num{% if a.neg %} neg{% endif %}">{{ a.sum_t }}</td></tr>
+                {% endfor %}
+                <tr class="total"><td>Итого</td><td class="num">{{ r.count }}</td><td class="num">{{ net_t }}</td></tr>
+            </tbody>
+        </table>
+
+        <h2>Операции</h2>
+        <table>
+            <thead><tr><th>Дата</th><th>Счёт</th><th>Статья / назначение</th><th class="num">Сумма, ₽</th></tr></thead>
+            <tbody>
+                {% for o in ops %}
+                    <tr>
+                        <td class="num">{{ o.date|date:"d.m.Y" }}</td>
+                        <td>{{ o.account_name }}</td>
+                        <td>{{ o.article_name|default:o.cf_name|default:"без статьи" }}<div class="note">{{ o.description|default:""|truncatechars:160 }}</div></td>
+                        <td class="num{% if o.neg %} neg{% endif %}">{{ o.rub_t }}{% if o.cur_t %}<div class="note">{{ o.cur_t }}</div>{% endif %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+    <style>.kpi b.neg { color: var(--fall); }</style>
+{% endblock %}

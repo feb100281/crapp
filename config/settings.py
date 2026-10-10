@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "treasury",
     "gl",
     "dashboard",
+    "tgbot",
     # "dashapp.apps.DashappConfig",
     "django_plotly_dash.apps.DjangoPlotlyDashConfig",    
     "django_json_widget",

@@ -8,12 +8,14 @@
 
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
 
 from django.contrib import admin
+from django.http import HttpResponse
 from django.shortcuts import render
 from django.urls import path, reverse
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from django.utils.html import format_html
 from django.db.models import Count, F, FloatField, IntegerField, Max, Min, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
@@ -30,6 +32,19 @@ from .common import (DashboardAdmin, chart, kpi, money, money2, money_cell, prin
 
 ACCOUNT_FILTERS = ("bank_name", "account_name", "currency")
 SUMS = ("bb_rub", "dt_rub", "cr_rub", "fx_diff_rub", "eb_rub")
+
+
+def _pdf_response(make, name: str):
+    """PDF файлом; если Chromium не установлен — понятная подсказка вместо 500."""
+    from ..services.day_render import PdfUnavailable
+
+    try:
+        data = make()
+    except PdfUnavailable as exc:
+        return HttpResponse(f"PDF недоступен: {exc}", status=503, content_type="text/plain; charset=utf-8")
+    response = HttpResponse(data, content_type="application/pdf")
+    response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(name)}.pdf"
+    return response
 
 
 def account_filters(request) -> dict:
@@ -164,6 +179,10 @@ class CashBalanceDayAdmin(DashboardAdmin):
     def get_urls(self):
         return [
             path("print/", self.admin_site.admin_view(self.print_view), name="dashboard_cashbalanceday_print"),
+            path("day-report/", self.admin_site.admin_view(self.day_report_view),
+                 name="dashboard_cashbalanceday_dayreport"),
+            path("day/<str:date>/", self.admin_site.admin_view(self.day_view),
+                 name="dashboard_cashbalanceday_day"),
             path(
                 "ops/<int:ba_id>/<str:date>/",
                 self.admin_site.admin_view(self.ops_view),
@@ -171,6 +190,167 @@ class CashBalanceDayAdmin(DashboardAdmin):
             ),
             *super().get_urls(),
         ]
+
+    # ------------------------------------------------------------------
+    # Страница: год → месяц → дни вместо длинного списка дней
+    # ------------------------------------------------------------------
+
+    def changelist_view(self, request, extra_context=None):
+        from django.db import connection
+        from django.template.response import TemplateResponse
+
+        table = self.model._meta.db_table
+        if table not in connection.introspection.table_names():
+            return TemplateResponse(request, "dashboard/not_built.html", {
+                **self.admin_site.each_context(request), "title": "Остатки по дням", "table": table})
+
+        flt = account_filters(request)
+        qs = self.get_queryset(request)
+        years = sorted(CashBalanceDay.objects.order_by().values_list("year", flat=True).distinct())
+        raw = request.GET.get("y")
+        year = None if raw == "all" else (int(raw) if raw and raw.isdigit() else (years[-1] if years else None))
+        scope = qs if year is None else qs.filter(year=year)
+
+        export = request.GET.get("export")
+        if export == "csv":
+            from core.reports.http import csv_response
+            return csv_response(*self.export_csv(request, scope), "Остатки по дням")
+        if export == "xlsx":
+            from core.reports.http import xlsx_response
+            book = self.export_book(request, scope)
+            if book:
+                return xlsx_response(book, "Остатки по дням")
+
+        rows = list(scope.order_by("date").values(
+            "date", "n", "v_stale", "v_stale_rub", "v_bb_rub", "v_dt_rub", "v_cr_rub", "v_fx_diff_rub", "v_eb_rub"))
+
+        here = {**flt, "y": "all" if year is None else year}
+        ctx = {
+            **self.admin_site.each_context(request),
+            "title": "Остатки по дням",
+            "opts": self.model._meta,
+            "years": years,
+            "year": year,
+            "query": urlencode(flt),
+            "filters": [
+                {"name": f, "title": t, "value": flt.get(f, ""),
+                 "values": list(CashBalance.objects.exclude(**{f"{f}__isnull": True})
+                                .order_by(f).values_list(f, flat=True).distinct())}
+                for f, t in (("bank_name", "Банк"), ("account_name", "Счёт"), ("currency", "Валюта"))
+            ],
+            "y_param": here["y"],
+            "day_url": reverse("admin:dashboard_cashbalanceday_day", args=["0000-00-00"]),
+            "flt_query": urlencode(flt),
+        }
+        if not rows:
+            ctx["empty"] = True
+            return TemplateResponse(request, "dashboard/balance_tree.html", ctx)
+
+        dash = self.header(request, scope)
+        dash["charts"] = self._charts(rows, flt)
+        dash["exports"] = [("Excel", "?" + urlencode({**here, "export": "xlsx"})),
+                           ("CSV", "?" + urlencode({**here, "export": "csv"}))]
+        dash["prints"] = self.print_links(request)
+        # «Счетов» — только с ненулевым остатком на конец дня
+        nonzero = dict(
+            CashBalance.objects.filter(date__gte=rows[0]["date"], date__lte=rows[-1]["date"], **flt)
+            .exclude(base_eb__range=(-0.005, 0.005)).order_by()
+            .values("date").annotate(c=Count("id")).values_list("date", "c"))
+        for r in rows:
+            r["n"] = nonzero.get(r["date"], 0)
+        tree, open_state = self._tree(rows)
+        ctx.update({"dash": dash, "tree": tree, "open_state": json.dumps(open_state)})
+        return TemplateResponse(request, "dashboard/balance_tree.html", ctx)
+
+    @staticmethod
+    def _tree(rows):
+        """Строки таблицы: год → месяц → день. Начало — первого дня, конец — последнего."""
+        months_ru = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август",
+                     "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+
+        def pack(kind, label, rid, parents, part, children=True, day=None):
+            first, last = part[0], part[-1]
+            return {
+                "kind": kind, "label": label, "id": rid, "level": len(parents), "children": children,
+                "show": " && ".join(f"open['{p}']" for p in parents) or "true",
+                "bb": money_cell(first["v_bb_rub"]),
+                "dt": money_cell(sum(r["v_dt_rub"] or 0 for r in part)),
+                "cr": money_cell(-sum(r["v_cr_rub"] or 0 for r in part)),
+                "fx": money_cell(sum(r["v_fx_diff_rub"] or 0 for r in part), signed=True),
+                "eb": money_cell(last["v_eb_rub"]),
+                "stale": last["v_stale"], "stale_rub": money(last["v_stale_rub"]),
+                "accounts": last["n"], "day": day,
+            }
+
+        by_year = OrderedDict()
+        for r in rows:
+            by_year.setdefault(r["date"].year, OrderedDict()).setdefault(r["date"].month, []).append(r)
+
+        out, open_state = [], {}
+        last_year = next(reversed(by_year))
+        for y, months in by_year.items():
+            yid = f"y{y}"
+            open_state[yid] = y == last_year
+            out.append(pack("year", str(y), yid, [], [r for m in months.values() for r in m]))
+            last_month = next(reversed(months))
+            for m, days in months.items():
+                mid = f"{yid}m{m}"
+                open_state[mid] = y == last_year and m == last_month
+                out.append(pack("month", f"{months_ru[m - 1]} {y}", mid, [yid], days))
+                for d in days:
+                    out.append(pack("day", d["date"].strftime("%d.%m.%Y"), "", [yid, mid], [d],
+                                    children=False, day=d["date"].isoformat()))
+        return out, open_state
+
+    @staticmethod
+    def _charts(rows, flt):
+        last = rows[-1]["date"]
+        balance = chart(
+            [r["date"].strftime("%d.%m.%y") for r in rows],
+            [{"label": "Остаток, млн ₽", "data": [round((r["v_eb_rub"] or 0) / 1e6, 2) for r in rows],
+              "borderColor": "var(--color-pk-navy)", "backgroundColor": "rgba(24, 50, 74, .08)",
+              "fill": True, "borderWidth": 2, "pointRadius": 0, "pointHoverRadius": 4, "tension": 0.15}],
+        )
+        banks = OrderedDict()
+        for b in (CashBalance.objects.filter(date=last, **flt).values("bank_name")
+                  .annotate(s=Sum("eb_rub")).order_by("-s")):
+            if abs(b["s"] or 0) >= 1:
+                banks[b["bank_name"] or "Без банка"] = round(b["s"] / 1e6, 2)
+        by_bank = chart(list(banks.keys()), [{
+            "label": "Остаток, млн ₽", "data": list(banks.values()),
+            "backgroundColor": "var(--color-pk-blue)", "borderRadius": 3, "maxBarThickness": 22}])
+        axis = {"ticks": {"color": "#9ca3af"}, "grid": {"color": "#e5e7eb88"}}
+        base = {"responsive": True, "maintainAspectRatio": False,
+                "plugins": {"legend": {"display": False}},
+                "interaction": {"mode": "index", "intersect": False}}
+        return [
+            {"title": "Остаток денег на конец дня, млн ₽", "type": "line", "data": balance,
+             "options": json.dumps({**base, "scales": {
+                 "x": {"grid": {"display": False}, "ticks": {"color": "#9ca3af", "maxTicksLimit": 12}},
+                 "y": axis}})},
+            {"title": f"Остаток по банкам на {last:%d.%m.%Y}, млн ₽", "type": "bar", "data": by_bank,
+             "options": json.dumps({**base, "indexAxis": "y", "scales": {
+                 "x": axis, "y": {"grid": {"display": False}, "ticks": {"color": "#6b7a87"}}}})},
+        ]
+
+    def day_view(self, request, date: str):
+        """Счета дня: только с остатком или движением."""
+        flt = account_filters(request)
+        rows = [
+            a for a in CashBalance.objects.filter(date=date, **flt).order_by("bank_name", "ba_number")
+            if any(abs(v or 0) >= 0.005 for v in (a.base_eb, a.base_bb, a.base_dt, a.base_cr))
+        ]
+        for a in rows:
+            a.ops_url = reverse("admin:dashboard_cashbalanceday_ops", args=[a.ba_id, date])
+            a.cells = [money_cell(a.base_eb), money_cell(a.bb_rub), money_cell(a.dt_rub),
+                       money_cell(-(a.cr_rub or 0)), money_cell(a.fx_diff_rub, signed=True), money_cell(a.eb_rub)]
+        total = sum(a.eb_rub or 0 for a in rows)
+        report_url = reverse("admin:dashboard_cashbalanceday_dayreport") + "?" + urlencode({**flt, "on": date})
+        return render(request, "dashboard/day_accounts_modal.html", {
+            "report_url": report_url,
+            "date": date, "rows": rows, "total": money(total),
+            "stale": sum(1 for a in rows if a.stale),
+        })
 
     # ------------------------------------------------------------------
     # Печать: остатки по счетам на дату (нулевые не показываем)
@@ -184,49 +364,47 @@ class CashBalanceDayAdmin(DashboardAdmin):
     def print_view(self, request):
         from datetime import date as date_type
 
+        from ..services import day_render
+
         flt = account_filters(request)
-        span = CashBalance.objects.aggregate(lo=Min("date"), hi=Max("date"))
-        if not span["hi"]:
-            return render(request, "dashboard/print_balances.html", {
-                **print_context(request, "Остатки", "Остатки денежных средств"), "groups": []})
         try:
             on = date_type.fromisoformat(request.GET.get("on") or "")
         except ValueError:
-            on = span["hi"]
-        on = min(max(on, span["lo"]), span["hi"])
+            on = None
+        if request.GET.get("fmt") == "pdf":
+            return _pdf_response(lambda: day_render.balances_pdf(on, flt), "Остатки")
+        return HttpResponse(day_render.balances_html(on, flt, request=request))
 
-        rows = (CashBalance.objects.filter(date=on, **flt)
-                .exclude(base_eb__range=(-0.005, 0.005))
-                .order_by("bank_name", "currency", "ba_number"))
-        groups, by_cur, total = OrderedDict(), OrderedDict(), 0.0
-        for r in rows:
-            g = groups.setdefault(r.bank_name or "Банк не указан", {"rows": [], "total": 0.0})
-            g["rows"].append({
-                "name": r.account_name if r.account_name and "…" not in r.account_name else "",
-                "number": r.ba_number,
-                "currency": r.currency or "", "eb": money2(r.base_eb),
-                "rate": "" if (r.currency or "RUB") == "RUB" else f"{r.rate:,.4f}".replace(",", " ").replace(".", ","),
-                "eb_rub": money2(r.eb_rub), "neg": (r.base_eb or 0) < 0,
-                "stale": r.stale, "stmt_to": f"{r.stmt_to:%d.%m.%Y}" if r.stmt_to else "",
-            })
-            g["total"] += r.eb_rub or 0
-            total += r.eb_rub or 0
-            by_cur[r.currency or "RUB"] = by_cur.get(r.currency or "RUB", 0.0) + (r.base_eb or 0)
+    def day_report_view(self, request):
+        """Движение денег за день: ?on=YYYY-MM-DD&fmt=html|pdf|xlsx (+ фильтры счетов)."""
+        from datetime import date as date_type
 
-        scope = " · ".join(flt.values()) or "все счета"
-        ctx = print_context(request, "Остатки по счетам", f"Остатки денежных средств на {on:%d.%m.%Y}",
-                            f"{scope} · счета с ненулевым остатком")
-        ctx.update({
-            "groups": [{"bank": k, "rows": v["rows"], "total": money2(v["total"])} for k, v in groups.items()],
-            "total": money2(total),
-            "by_currency": [(c, money2(v)) for c, v in by_cur.items() if c != "RUB" or len(by_cur) > 1],
-            "count": sum(len(v["rows"]) for v in groups.values()),
-            "has_names": any(r["name"] or r["stale"] for v in groups.values() for r in v["rows"]),
-            "on": f"{on:%d.%m.%Y}", "on_iso": on.isoformat(),
-            "min_iso": span["lo"].isoformat(), "max_iso": span["hi"].isoformat(),
-            "keep": list(flt.items()),
-        })
-        return render(request, "dashboard/print_balances.html", ctx)
+        from core.reports.http import xlsx_response
+
+        from ..services import day_render, day_report
+
+        flt = account_filters(request)
+        last = CashBalance.objects.aggregate(d=Max("date"))["d"]
+        try:
+            on = date_type.fromisoformat(request.GET.get("on") or "")
+        except ValueError:
+            on = last
+        if on is None:
+            return HttpResponse("Нет данных")
+        report = day_report.build(on, flt)
+        name = f"Движение денег {on:%d.%m.%Y}"
+        fmt = request.GET.get("fmt")
+        if fmt == "pdf":
+            return _pdf_response(lambda: day_render.day_pdf(report), name)
+        if fmt == "xlsx":
+            return xlsx_response(day_render.day_book(report), name)
+        base = reverse("admin:dashboard_cashbalanceday_dayreport")
+        query = {**flt, "on": on.isoformat()}
+        return HttpResponse(day_render.day_html(
+            report, request=request, on_iso=on.isoformat(), keep=list(flt.items()),
+            pdf_url=f"{base}?{urlencode({**query, 'fmt': 'pdf'})}",
+            xlsx_url=f"{base}?{urlencode({**query, 'fmt': 'xlsx'})}",
+        ))
 
     def ops_view(self, request, ba_id: int, date: str):
         acc = CashBalance.objects.filter(ba_id=ba_id, date=date).first()

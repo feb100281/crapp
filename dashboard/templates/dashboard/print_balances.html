@@ -1,11 +1,14 @@
 {% extends "dashboard/print_base.html" %}
 
 {% block bar %}
+    {% if not pdf %}
     <form method="get" style="display:flex;gap:8px;align-items:center">
         {% for k, v in keep %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
         <label class="note">На дату</label>
         <input type="date" name="on" value="{{ on_iso }}" min="{{ min_iso }}" max="{{ max_iso }}" onchange="this.form.submit()">
     </form>
+    <a href="?{% for k, v in keep %}{{ k }}={{ v|urlencode }}&{% endfor %}on={{ on_iso }}&fmt=pdf">Скачать PDF</a>
+    {% endif %}
 {% endblock %}
 
 {% block body %}

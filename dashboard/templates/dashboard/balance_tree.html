@@ -1,0 +1,98 @@
+{% extends "admin/base_site.html" %}
+{% load l10n %}
+
+{% block content %}
+<div class="pk-cf-page">
+
+    <div class="pk-cf-toolbar">
+        <div class="pk-seg">
+            {% for y in years %}
+                <a href="?{{ query }}{% if query %}&{% endif %}y={{ y|unlocalize }}" class="pk-seg-item{% if y == year %} pk-seg-active{% endif %}">{{ y|unlocalize }}</a>
+            {% endfor %}
+            <a href="?{{ query }}{% if query %}&{% endif %}y=all" class="pk-seg-item{% if not year %} pk-seg-active{% endif %}">Весь период</a>
+        </div>
+        <form method="get" class="pk-cf-filters">
+            <input type="hidden" name="y" value="{{ y_param|unlocalize }}">
+            {% for f in filters %}
+                <select name="{{ f.name }}" class="pk-select" onchange="this.form.submit()">
+                    <option value="">{{ f.title }}: все</option>
+                    {% for v in f.values %}<option value="{{ v }}"{% if v == f.value %} selected{% endif %}>{{ v }}</option>{% endfor %}
+                </select>
+            {% endfor %}
+            <a href="?y={{ y_param|unlocalize }}" class="pk-seg-reset" title="Сбросить фильтры"><span class="material-symbols-outlined">filter_alt_off</span></a>
+        </form>
+    </div>
+
+    {% if empty %}
+        <div class="pk-dd-empty">Нет данных за выбранный период</div>
+    {% else %}
+        {% include "dashboard/header.html" %}
+
+        <div class="pk-card pk-cf-card" id="days" x-data='{ "open": {{ open_state|safe }} }'
+             x-init="$nextTick(() => pkCfZebra($el)); $watch('open', () => $nextTick(() => pkCfZebra($el)))">
+            <div class="pk-cf-actions">
+                <button type="button" class="pk-seg-item" x-on:click="Object.keys(open).forEach(k => open[k] = /^y\d+$/.test(k) ? true : false)">Только месяцы</button>
+                <button type="button" class="pk-seg-item" x-on:click="Object.keys(open).forEach(k => open[k] = false)">Только годы</button>
+                <span class="pk-cf-hint">Клик по месяцу — дни · клик по дню — счета с остатком</span>
+            </div>
+            <div class="pk-cf-scroll">
+                <table class="pk-cf-table pk-bal-table">
+                    <thead>
+                        <tr>
+                            <th class="pk-cf-name">Период</th>
+                            <th class="pk-cf-num" title="Счетов с ненулевым остатком на конец периода">Счетов с остатком</th>
+                            <th class="pk-cf-num">Начало, ₽</th>
+                            <th class="pk-cf-num">Приход, ₽</th>
+                            <th class="pk-cf-num">Расход, ₽</th>
+                            <th class="pk-cf-num">Курсовая, ₽</th>
+                            <th class="pk-cf-num pk-cf-total">Конец, ₽</th>
+                            <th class="pk-cf-num">Выписки</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in tree %}
+                            <tr class="pk-bal-{{ r.kind }}{% if r.kind == 'day' %} pk-cf-article{% endif %} pk-cf-l{{ r.level }}" x-show="{{ r.show }}">
+                                <th class="pk-cf-name">
+                                    <div class="pk-cf-label">
+                                        {% if r.children %}
+                                            <button type="button" class="pk-cf-toggle"
+                                                    x-on:click="open['{{ r.id }}'] = !open['{{ r.id }}']"
+                                                    x-bind:class="open['{{ r.id }}'] && 'pk-cf-open'">
+                                                <span class="material-symbols-outlined">chevron_right</span>
+                                            </button>
+                                            <span class="pk-bal-click" x-on:click="open['{{ r.id }}'] = !open['{{ r.id }}']">{{ r.label }}</span>
+                                        {% else %}
+                                            <span class="pk-cf-spacer"></span>
+                                            <a href="#" class="pk-cf-link" hx-get="{{ day_url|cut:'0000-00-00/' }}{{ r.day }}/{% if flt_query %}?{{ flt_query }}{% endif %}"
+                                               hx-target="#pk-ops-body" onclick="pkOpsOpen()">{{ r.label }}</a>
+                                        {% endif %}
+                                    </div>
+                                </th>
+                                <td class="pk-cf-num">{{ r.accounts|unlocalize }}</td>
+                                <td class="pk-cf-num">{{ r.bb }}</td>
+                                <td class="pk-cf-num">{{ r.dt }}</td>
+                                <td class="pk-cf-num">{{ r.cr }}</td>
+                                <td class="pk-cf-num">{{ r.fx }}</td>
+                                <td class="pk-cf-num pk-cf-total">{{ r.eb }}</td>
+                                <td class="pk-cf-num">{% if r.stale %}<span class="pk-chip pk-chip-bad" title="Остаток перенесён: {{ r.stale_rub }} ₽">{{ r.stale }} без выписки</span>{% endif %}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% if empty %}{% include "dashboard/modal.html" %}{% endif %}
+<script>
+    function pkCfZebra(root) {
+        let i = 0;
+        root.querySelectorAll("tbody tr").forEach((tr) => {
+            const leaf = tr.classList.contains("pk-cf-article");
+            if (!leaf) { i = 0; tr.classList.remove("pk-cf-zebra"); return; }
+            const shown = tr.style.display !== "none";
+            tr.classList.toggle("pk-cf-zebra", shown && i++ % 2 === 1);
+        });
+    }
+</script>
+{% endblock %}

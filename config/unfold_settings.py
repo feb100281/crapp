@@ -54,6 +54,16 @@ UNFOLD_SETTINGD = {
                         "link": reverse_lazy("admin:auth_user_changelist"),
                     },
                     {
+                        "title": "Telegram-бот: пользователи",
+                        "icon": "send",
+                        "link": reverse_lazy("admin:tgbot_tguser_changelist"),
+                    },
+                    {
+                        "title": "Telegram-бот: приглашения",
+                        "icon": "link",
+                        "link": reverse_lazy("admin:tgbot_tginvite_changelist"),
+                    },
+                    {
                         "title": "Команды",
                         "icon": "wand_shine",
                         "link": reverse_lazy("admin:core_jobs_changelist"),

@@ -81,6 +81,7 @@ SELECT
     least(min(st.df), COALESCE(any_value(ln.mn), min(st.df)), COALESCE(any_value(gl.mn), min(st.df)))       AS min_date,
     greatest(max(st.dt_to), COALESCE(any_value(ln.mx), max(st.dt_to)), COALESCE(any_value(gl.mx), max(st.dt_to))) AS max_date,
     max(st.dt_to)                                                    AS stmt_to,
+    any_value(a.closed_on)::DATE                                     AS closed_on,
     COALESCE(any_value(gl.has_opening), FALSE)                       AS has_gl_opening,
     arg_min(st.bb, st.df)                                            AS opening_stmt,
     CASE WHEN COALESCE(any_value(gl.has_opening), FALSE) THEN 0
@@ -96,13 +97,15 @@ GROUP BY a.id, a.number, f.code;
 -- Все счета тянутся до самой свежей выписки по компании: остаток счёта,
 -- по которому выписки отстают, переносится (валютный — переоценивается),
 -- а день помечается stale — выписка по счёту устарела.
+-- Закрытый счёт (closed_on) обрывается на дате закрытия.
 CREATE OR REPLACE TEMP TABLE cash_reval AS
 WITH days AS (
     SELECT a.id AS ba_id, a.number, a.currency, a.opening, a.stmt_to, g.d::DATE AS d
     FROM reval_accounts a,
          generate_series(
              a.min_date,
-             greatest(a.max_date, (SELECT max(max_date) FROM reval_accounts)),
+             least(greatest(a.max_date, (SELECT max(max_date) FROM reval_accounts)),
+                   COALESCE(a.closed_on, DATE '9999-12-31')),
              INTERVAL 1 DAY
          ) AS g(d)
 ),

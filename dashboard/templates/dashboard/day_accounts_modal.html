@@ -1,0 +1,47 @@
+{# Фрагмент для модалки: счета дня с остатком или движением (htmx) #}
+<div class="pk-ops">
+    <div class="pk-ops-head">
+        <div class="pk-hero-kicker">Остатки по счетам</div>
+        <div class="pk-ops-title">{{ date|slice:"8:10" }}.{{ date|slice:"5:7" }}.{{ date|slice:":4" }}</div>
+        <div class="pk-ops-sub">Счета с остатком или движением за день · всего {{ total }} ₽{% if stale %} · без свежей выписки: {{ stale }}{% endif %}</div>
+        <div class="pk-ops-tools">
+            <span class="pk-cf-hint">Движение денег за день:</span>
+            <a href="{{ report_url }}" target="_blank" rel="noopener" class="pk-btn pk-btn-primary"><span class="material-symbols-outlined">print</span>Открыть / печать</a>
+            <a href="{{ report_url }}&fmt=pdf" class="pk-btn"><span class="material-symbols-outlined">picture_as_pdf</span>PDF</a>
+            <a href="{{ report_url }}&fmt=xlsx" class="pk-btn"><span class="material-symbols-outlined">download</span>Excel</a>
+        </div>
+    </div>
+    {% if rows %}
+        <div class="pk-mini-note">Клик по счёту — операции за день.</div>
+        <div class="pk-scroll pk-ops-scroll">
+            <table class="pk-mini-table">
+                <thead>
+                    <tr>
+                        <th>Счёт</th>
+                        <th>Вал.</th>
+                        <th class="pk-num">Остаток, вал.</th>
+                        <th class="pk-num">Начало, ₽</th>
+                        <th class="pk-num">Приход, ₽</th>
+                        <th class="pk-num">Расход, ₽</th>
+                        <th class="pk-num">Курсовая, ₽</th>
+                        <th class="pk-num">Конец, ₽</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in rows %}
+                        <tr>
+                            <td>
+                                <a href="#" class="pk-cf-link" hx-get="{{ a.ops_url }}" hx-target="#pk-ops-body">{{ a.account_name }}</a>
+                                <div class="pk-mini-note">{{ a.bank_name|default:"" }}{% if a.stale %} · выписка по {{ a.stmt_to|date:"d.m.Y" }}, остаток перенесён{% endif %}</div>
+                            </td>
+                            <td>{{ a.currency }}</td>
+                            {% for c in a.cells %}<td class="pk-num">{{ c }}</td>{% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="pk-dd-empty">В этот день остатков нет</div>
+    {% endif %}
+</div>

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -55,7 +55,8 @@ class Command(BaseCommand):
         else:
             date_from = date.fromisoformat(str(raw_date_from))
 
-        date_to = timezone.localdate()
+        # по завтра: курс на завтра ЦБ публикует к вечеру рабочего дня
+        date_to = timezone.localdate() + timedelta(days=1)
         loaded_at = timezone.now()
 
         # ---------------------------------------------------------
@@ -261,6 +262,15 @@ class Command(BaseCommand):
                         writelog(
                             f"Saved: {output_path}"
                         )
+
+                # =================================================
+                # Витрина курсов для бота и дашбордов
+                # =================================================
+
+                from dashboard.services.fx_feed import refresh_mart
+
+                writelog("")
+                writelog(f"Витрина dashboard_fx_rate: {refresh_mart()} курсов")
 
                 # =================================================
                 # DONE

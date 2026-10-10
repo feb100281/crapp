@@ -1,0 +1,364 @@
+{% load static %}<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COSMORELAX · Деньги</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="{% static 'unfold/fonts/inter/styles.css' %}" rel="stylesheet">
+<style>
+    :root {
+        --navy: #18324A; --navy-2: #22466A; --blue: #2F6B8A; --sky: #6D97AC; --gold: #B8862E;
+        --rise: #1A7A5E; --fall: #B54A3F;
+        --bg: #F4F8FA; --card: #FFFFFF; --ink: #1D2935; --muted: #6B7A87; --line: #E1E8ED; --soft: #EEF3F6;
+    }
+    html.dark {
+        --bg: #0B1A28; --card: #12263A; --ink: #E6EDF2; --muted: #8FA2B2; --line: #22384D; --soft: #183049;
+        --fall: #E0857A; --rise: #5CC2A0;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink); }
+    body { font: 15px/1.4 Inter, -apple-system, "Segoe UI", Roboto, sans-serif; padding-bottom: 96px; }
+    button { font: inherit; color: inherit; }
+    .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .neg { color: var(--fall); }
+
+    .top { background: radial-gradient(120% 100% at 0% 0%, var(--navy-2), var(--navy) 55%, #102436);
+           color: #fff; padding: 18px 16px 54px; border-bottom: 3px solid var(--gold); }
+    .brand { font-size: 11px; letter-spacing: .16em; color: var(--gold); font-weight: 700; }
+    .hello { font-size: 22px; font-weight: 700; margin: 6px 0 2px; }
+    .sub { color: #AFC3D2; font-size: 13px; }
+
+    .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--card); border-radius: 12px;
+            padding: 4px; margin: -38px 16px 12px; box-shadow: 0 6px 20px #0b1a2826; position: relative; }
+    .tabs button { border: 0; background: none; padding: 8px 2px; border-radius: 9px; font-weight: 600; font-size: 12px;
+                   color: var(--muted); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .tabs button i { font-style: normal; font-size: 18px; }
+    .tabs button.on { background: var(--navy); color: #fff; }
+    html.dark .tabs button.on { background: var(--blue); }
+
+    .datebar { display: flex; align-items: center; gap: 8px; margin: 0 16px 12px; }
+    .arrow { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+             font-size: 18px; cursor: pointer; flex: none; }
+    .arrow:disabled { opacity: .35; }
+    .datebox { flex: 1; position: relative; height: 40px; border-radius: 10px; border: 1px solid var(--line);
+               background: var(--card); display: flex; align-items: center; justify-content: center; font-weight: 600; }
+    .datebox input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+    .chips { display: flex; gap: 6px; margin: 0 16px 14px; }
+    .chip { border: 1px solid var(--line); background: var(--card); border-radius: 20px; padding: 6px 12px;
+            font-size: 13px; cursor: pointer; }
+    .chip.on { border-color: var(--blue); color: var(--blue); font-weight: 600; }
+    html.dark .chip.on { border-color: var(--sky); color: #CFE0EA; }
+
+    .hero { margin: 0 16px 12px; background: var(--card); border-radius: 14px; padding: 16px; border: 1px solid var(--line); }
+    .hero .label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    .hero .big { font-size: 28px; font-weight: 700; margin: 4px 0 8px; color: var(--navy); }
+    html.dark .hero .big { color: #fff; }
+    .curs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .cur { background: var(--soft); border-radius: 8px; padding: 4px 8px; font-size: 12px; }
+
+    .grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 16px 12px; }
+    .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+    .tile span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .tile b { font-size: 16px; }
+    .tile.in b { color: var(--rise); }
+
+    .card { margin: 0 16px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 12px 14px;
+                 font-weight: 600; cursor: pointer; }
+    .card-head small { color: var(--muted); font-weight: 400; }
+    .row { display: flex; justify-content: space-between; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--line);
+           font-size: 14px; }
+    .row .meta { font-size: 12px; color: var(--muted); }
+    .warn { color: var(--gold); font-size: 12px; }
+    .sec-title { margin: 16px 16px 8px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+                 color: var(--muted); display: flex; justify-content: space-between; }
+    .art .card-head .chev { transition: transform .15s; color: var(--muted); }
+    .art.open .card-head .chev { transform: rotate(90deg); }
+    .art .rows { display: none; }
+    .art.open .rows { display: block; }
+    .code { color: var(--muted); font-size: 11px; font-weight: 400; margin-right: 4px; }
+
+    .bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+              background: linear-gradient(transparent, var(--bg) 30%); display: flex; gap: 8px; }
+    .btn { flex: 1; height: 46px; border: 0; border-radius: 12px; font-weight: 600; cursor: pointer;
+           background: var(--navy); color: #fff; }
+    html.dark .btn { background: var(--blue); }
+    .btn.alt, html.dark .btn.alt { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+    .btn:disabled { opacity: .5; }
+
+    .empty, .msg { margin: 24px 16px; text-align: center; color: var(--muted); }
+    .skeleton { margin: 0 16px 10px; height: 64px; border-radius: 14px; background: linear-gradient(90deg, var(--soft), var(--card), var(--soft));
+                background-size: 200% 100%; animation: sh 1.2s infinite; }
+    @keyframes sh { to { background-position: -200% 0; } }
+    .toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: var(--navy); color: #fff;
+             padding: 10px 14px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+    .toast.show { opacity: 1; }
+    .search { margin: 0 16px 12px; position: relative; }
+    .search input { width: 100%; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+                    color: var(--ink); font: inherit; padding: 0 14px 0 40px; outline: none; }
+    .search input:focus { border-color: var(--blue); }
+    .search span { position: absolute; left: 14px; top: 11px; color: var(--muted); }
+    .item { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); cursor: pointer; }
+    .item:first-child { border-top: 0; }
+    .back { margin: 0 16px 10px; border: 0; background: none; color: var(--blue); font-weight: 600; padding: 0; cursor: pointer; }
+    html.dark .back { color: var(--sky); }
+    .chart { margin: 0 16px 12px; background: #fff; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+    .chart svg { width: 100%; height: auto; display: block; }
+    .up::before { content: "▲ "; color: #1F9D55; font-size: 11px; } .down::before { content: "▼ "; color: #D64545; font-size: 11px; }
+    .tips { margin: 0 16px 12px; background: var(--soft); border-radius: 12px; padding: 10px 14px; font-size: 14px; }
+    .tips div { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="top">
+    <div class="brand">COSMORELAX · ДЕНЬГИ</div>
+    <div class="hello" id="hello">Здравствуйте!</div>
+    <div class="sub" id="sub">Остатки и движение денег по банкам</div>
+</div>
+
+<div class="tabs">
+    <button id="t-bal" class="on" onclick="setTab('bal')"><i>💰</i>Остатки</button>
+    <button id="t-day" onclick="setTab('day')"><i>📋</i>Движение</button>
+    <button id="t-cp" onclick="setTab('cp')"><i>💸</i>Оплаты</button>
+    <button id="t-fx" onclick="setTab('fx')"><i>💱</i>Курсы</button>
+</div>
+
+<div id="datepart">
+<div class="datebar">
+    <button class="arrow" id="prev" onclick="shift(-1)" aria-label="Предыдущий день">‹</button>
+    <div class="datebox"><span id="dlabel">—</span><input type="date" id="dpick" onchange="pick(this.value)"></div>
+    <button class="arrow" id="next" onclick="shift(1)" aria-label="Следующий день">›</button>
+</div>
+<div class="chips">
+    <button class="chip" id="c-last" onclick="pick(state.hi)">Последний день</button>
+    <button class="chip" id="c-prev" onclick="pick(addDays(state.hi, -1))">Накануне</button>
+</div>
+</div>
+
+<div id="view"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+
+<div class="bottom" id="bottom" style="display:none">
+    <button class="btn" id="b-pdf" onclick="send('pdf')">📄 PDF в чат</button>
+    <button class="btn alt" id="b-xlsx" onclick="send('xlsx')">📊 Excel в чат</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    const state = { tab: "bal", on: null, lo: null, hi: null, cp: null, period: "y", q: "", cur: null, days: 90 };
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const fmtDate = (iso) => iso ? iso.split("-").reverse().join(".") : "—";
+    const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+
+    async function api(path, opts = {}) {
+        const res = await fetch(path, { ...opts, headers: { "X-Telegram-Init-Data": tg ? tg.initData : "", ...(opts.headers || {}) } });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error || "Ошибка " + res.status);
+        return body;
+    }
+
+    function toast(text) {
+        const t = $("toast"); t.textContent = text; t.classList.add("show");
+        setTimeout(() => t.classList.remove("show"), 2200);
+    }
+
+    function setTab(tab) {
+        state.tab = tab;
+        for (const t of ["bal", "day", "cp", "fx"]) $("t-" + t).classList.toggle("on", tab === t);
+        $("datepart").style.display = tab === "bal" || tab === "day" ? "" : "none";
+        $("b-xlsx").style.display = tab === "bal" ? "none" : "";
+        tg && tg.HapticFeedback && tg.HapticFeedback.selectionChanged();
+        load();
+    }
+
+    function pick(iso) {
+        if (!iso) return;
+        if (state.lo && iso < state.lo) iso = state.lo;
+        if (state.hi && iso > state.hi) iso = state.hi;
+        state.on = iso; load();
+    }
+    function shift(n) { pick(addDays(state.on, n)); }
+
+    function syncDate() {
+        $("dlabel").textContent = fmtDate(state.on);
+        $("dpick").value = state.on; $("dpick").min = state.lo; $("dpick").max = state.hi;
+        $("prev").disabled = state.on <= state.lo;
+        $("next").disabled = state.on >= state.hi;
+        $("c-last").classList.toggle("on", state.on === state.hi);
+        $("c-prev").classList.toggle("on", state.on === addDays(state.hi, -1));
+    }
+
+    async function load() {
+        if (state.tab === "cp") return state.cp ? loadCp() : renderSearch();
+        if (state.tab === "fx") return loadFx();
+        syncDate();
+        $("view").innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+        try {
+            if (state.tab === "bal") renderBal(await api(`../api/balances/?on=${state.on}`));
+            else renderDay(await api(`../api/day/?on=${state.on}`));
+            $("bottom").style.display = "";
+        } catch (e) {
+            $("view").innerHTML = `<div class="msg">${esc(e.message)}</div>`;
+        }
+    }
+
+    function renderBal(d) {
+        if (d.empty) { $("view").innerHTML = '<div class="empty">Остатков пока нет</div>'; return; }
+        const curs = d.currencies.length > 1 || (d.currencies[0] && d.currencies[0].code !== "RUB")
+            ? `<div class="curs">${d.currencies.map((c) => `<span class="cur">${esc(c.code)} <b class="num">${esc(c.value)}</b></span>`).join("")}</div>` : "";
+        let html = `<div class="hero"><div class="label">Деньги на счетах · ${fmtDate(d.on)}</div>
+            <div class="big num">${esc(d.total)} ₽</div>${curs}</div>`;
+        html += d.banks.map((b) => `<div class="card">
+            <div class="card-head"><span>🏦 ${esc(b.bank)}</span><span class="num${b.neg ? " neg" : ""}">${esc(b.total)} ₽</span></div>
+            ${b.rows.map((r) => `<div class="row"><div>${esc(r.number)} · ${esc(r.currency)}
+                ${r.stale ? `<div class="warn">выписка по ${esc(r.stmt_to)}</div>` : ""}</div>
+                <div style="text-align:right"><div class="num${r.neg ? " neg" : ""}">${esc(r.eb)} ${r.currency !== "RUB" ? esc(r.currency) : "₽"}</div>
+                ${r.currency !== "RUB" ? `<div class="meta num">${esc(r.eb_rub)} ₽</div>` : ""}</div></div>`).join("")}
+        </div>`).join("");
+        $("view").innerHTML = html || '<div class="empty">Счетов с остатком нет</div>';
+    }
+
+    function renderDay(d) {
+        state.on = d.on; syncDate();
+        let html = `<div class="grid4">
+            <div class="tile"><span>Начало</span><b class="num">${esc(d.opening)}</b></div>
+            <div class="tile in"><span>Поступления</span><b class="num">${esc(d.inflow)}</b></div>
+            <div class="tile"><span>Выплаты</span><b class="num neg">${esc(d.outflow)}</b></div>
+            <div class="tile"><span>Конец</span><b class="num">${esc(d.closing)}</b></div></div>`;
+        if (d.empty) { $("view").innerHTML = html + '<div class="empty">Движения за день нет</div>' + ddsCard(); return; }
+        for (const b of d.blocks) {
+            html += `<div class="sec-title"><span>${esc(b.title)}</span><span class="num${b.neg ? " neg" : ""}">${esc(b.total)}</span></div>`;
+            html += b.articles.map((a) => `<div class="card art">
+                <div class="card-head" onclick="this.parentElement.classList.toggle('open')">
+                    <span><span class="chev">›</span> ${a.code ? `<span class="code">${esc(a.code)}</span>` : ""}${esc(a.name)} <small>· ${a.count}</small></span>
+                    <span class="num${a.neg ? " neg" : ""}">${esc(a.total)}</span></div>
+                <div class="rows">${a.rows.map((c) => `<div class="row"><div>${esc(c.name)}
+                    <div class="meta">${[c.inn && "ИНН " + esc(c.inn), esc(c.sub)].filter(Boolean).join(" · ")}</div></div>
+                    <div class="num${c.neg ? " neg" : ""}">${esc(c.amount)}</div></div>`).join("")}</div>
+            </div>`).join("");
+        }
+        if (d.fx) html += `<div class="sec-title"><span>Курсовая разница</span><span class="num">${esc(d.fx)}</span></div>`;
+        $("view").innerHTML = html + ddsCard();
+    }
+
+    // --- отчёт ДДС за год: тот же Excel, что на сайте
+    function ddsCard() {
+        if (!state.ddsYears || !state.ddsYears.length) return "";
+        return `<div class="sec-title"><span>Отчёт ДДС за год</span></div>
+            <div class="tips">Excel как на сайте: помесячно, дни под плюсиками, расшифровка по контрагентам и все операции.
+            <div class="chips" style="margin:10px 0 2px; padding:0">${state.ddsYears.map((y) =>
+                `<button class="chip" onclick="sendDds(${y}, this)">📊 ${y} — в чат</button>`).join("")}</div></div>`;
+    }
+    async function sendDds(year, btn) {
+        btn.disabled = true; const label = btn.textContent; btn.textContent = "Готовлю…";
+        try {
+            await api("../api/send/", { method: "POST", body: new URLSearchParams({ kind: "dds", fmt: "xlsx", year }) });
+            tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+            toast("Отчёт ДДС отправлен в чат ✓");
+        } catch (e) { toast(e.message); }
+        finally { btn.disabled = false; btn.textContent = label; }
+    }
+
+    // --- контрагенты
+    function renderSearch() {
+        $("bottom").style.display = "none";
+        $("view").innerHTML = `<div class="search"><span>🔎</span><input id="q" placeholder="Название или ИНН" value="${esc(state.q)}" autocomplete="off"></div>
+            <div id="found"></div>`;
+        const input = $("q"); let timer;
+        input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => find(input.value), 300); });
+        if (state.q) find(state.q); else $("found").innerHTML = '<div class="msg">Начните вводить — покажу совпадения</div>';
+        setTimeout(() => input.focus(), 50);
+    }
+    async function find(q) {
+        state.q = q;
+        if (q.trim().length < 2) { $("found").innerHTML = ""; return; }
+        try {
+            const d = await api(`../api/cp/search/?q=${encodeURIComponent(q)}`);
+            $("found").innerHTML = d.items.length ? `<div class="card">${d.items.map((f) => `
+                <div class="item" data-key="${esc(f.key)}"><div>${esc(f.name)}<div class="meta">${f.inn ? "ИНН " + esc(f.inn) + " · " : ""}${f.n} опер.</div></div>
+                <div class="meta">${esc(f.last)}</div></div>`).join("")}</div>` : '<div class="msg">Ничего не нашлось</div>';
+            document.querySelectorAll("#found .item").forEach((el) => el.onclick = () => { state.cp = el.dataset.key; state.period = "y"; loadCp(); });
+        } catch (e) { $("found").innerHTML = `<div class="msg">${esc(e.message)}</div>`; }
+    }
+    async function loadCp() {
+        $("view").innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+        try {
+            const d = await api(`../api/cp/?key=${encodeURIComponent(state.cp)}&period=${state.period}`);
+            let html = `<button class="back" onclick="state.cp=null; load()">‹ К поиску</button>
+                <div class="hero"><div class="label">${d.inn ? "ИНН " + esc(d.inn) : "Контрагент"}</div>
+                <div class="big" style="font-size:20px">${esc(d.name)}</div><div class="meta">${esc(d.range)}</div></div>
+                <div class="chips" style="flex-wrap:wrap">${d.periods.map((p) => `<button class="chip${p.code === d.period ? " on" : ""}" onclick="state.period='${p.code}'; loadCp()">${esc(p.name)}</button>`).join("")}</div>
+                <div class="grid4">
+                    <div class="tile"><span>Мы заплатили</span><b class="num neg">${esc(d.paid || "–")}</b></div>
+                    <div class="tile in"><span>Нам заплатили</span><b class="num">${esc(d.got || "–")}</b></div></div>`;
+            if (!d.count) { $("view").innerHTML = html + '<div class="empty">За период платежей нет</div>'; $("bottom").style.display = "none"; return; }
+            html += `<div class="sec-title"><span>По статьям</span><span>${d.count} опер.</span></div><div class="card">
+                ${d.articles.map((a) => `<div class="row"><div>${esc(a.name)} <span class="meta">· ${a.n}</span></div><div class="num${a.neg ? " neg" : ""}">${esc(a.sum)}</div></div>`).join("")}</div>
+                <div class="sec-title"><span>Операции</span></div><div class="card">
+                ${d.ops.map((o) => `<div class="row"><div>${esc(o.date)} · ${esc(o.article)}<div class="meta">${esc(o.desc)}</div></div><div class="num${o.neg ? " neg" : ""}">${esc(o.sum)}</div></div>`).join("")}</div>
+                ${d.more ? `<div class="msg">…и ещё ${d.more} — в PDF или Excel</div>` : ""}`;
+            $("view").innerHTML = html;
+            $("bottom").style.display = "";
+        } catch (e) { $("view").innerHTML = `<div class="msg">${esc(e.message)}</div>`; }
+    }
+
+    // --- курсы
+    async function loadFx() {
+        $("bottom").style.display = "none";
+        $("view").innerHTML = '<div class="skeleton"></div><div class="skeleton" style="height:200px"></div>';
+        try {
+            const d = await api(`../api/fx/?cur=${state.cur || ""}&days=${state.days}`);
+            if (d.empty) { $("view").innerHTML = '<div class="empty">Курсов пока нет</div>'; return; }
+            state.cur = d.cur;
+            $("view").innerHTML = `
+                <div class="chips">${d.currencies.map((c) => `<button class="chip${c === d.cur ? " on" : ""}" onclick="state.cur='${c}'; loadFx()">${c}</button>`).join("")}</div>
+                <div class="hero"><div class="label">${esc(d.name)} · курс ЦБ ${esc(d.label)}</div><div class="big num">${esc(d.rate)} ₽</div>
+                    ${d.next ? `<div class="label num ${d.next.up ? "up" : "down"}" style="margin-top:6px">на завтра, ${esc(d.next.date)}: <b>${esc(d.next.rate)} ₽</b> · ${esc(d.next.diff)}</div>` : ""}</div>
+                <div class="chips">${[[30, "30 дней"], [90, "90 дней"], [365, "Год"]].map(([n, t]) => `<button class="chip${n === d.days ? " on" : ""}" onclick="state.days=${n}; loadFx()">${t}</button>`).join("")}</div>
+                <div class="chart">${d.svg}</div>
+                <div class="card">${d.changes.map((c) => `<div class="row"><div>${esc(c.label)}</div><div class="num ${c.up ? "up" : "down"}">${esc(c.diff)} ₽ · ${esc(c.pct)} %</div></div>`).join("")}</div>
+                ${d.tips.length ? `<div class="tips"><b>Выводы</b>${d.tips.map((t) => `<div>• ${esc(t)}</div>`).join("")}</div>` : ""}
+                ${d.note ? `<div class="tips" style="font-size:13px;color:var(--muted)">${esc(d.note)}</div>` : ""}`;
+        } catch (e) { $("view").innerHTML = `<div class="msg">${esc(e.message)}</div>`; }
+    }
+
+    async function send(fmt) {
+        const btn = $(fmt === "pdf" ? "b-pdf" : "b-xlsx"); btn.disabled = true;
+        try {
+            const body = new URLSearchParams({ kind: state.tab, fmt, on: state.on || "", key: state.cp || "", period: state.period });
+            await api("../api/send/", { method: "POST", body });
+            tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+            toast("Отправлено в чат ✓");
+        } catch (e) {
+            tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("error");
+            toast(e.message);
+        } finally { btn.disabled = false; }
+    }
+
+    (async () => {
+        if (tg) {
+            tg.ready(); tg.expand();
+            if (tg.colorScheme === "dark") document.documentElement.classList.add("dark");
+            tg.setHeaderColor && tg.setHeaderColor("#18324A");
+        }
+        if (!tg || !tg.initData) {
+            $("view").innerHTML = '<div class="msg">Откройте это окно из Telegram-бота — кнопка «📱 Приложение».</div>';
+            return;
+        }
+        try {
+            const meta = await api("../api/meta/");
+            const h = new Date().getHours();
+            const greet = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
+            $("hello").textContent = `${greet}, ${meta.name || "коллега"}!`;
+            $("sub").textContent = `Выписки загружены по ${fmtDate(meta.hi)}`;
+            Object.assign(state, { lo: meta.lo, hi: meta.hi, on: meta.hi, ddsYears: meta.dds_years || [] });
+            load();
+        } catch (e) {
+            $("view").innerHTML = `<div class="msg">${esc(e.message)}</div>`;
+        }
+    })();
+</script>
+</body>
+</html>

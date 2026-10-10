@@ -193,3 +193,43 @@ CSV — UTF-8 с BOM, разделитель «;», десятичная зап�
 ```bash
 npx @tailwindcss/cli -i ./static/css/input.css -o ./static/css/output.css --minify
 ```
+
+## Telegram-бот
+
+Бот показывает остатки на дату и движение денег за день (PDF / Excel) из тех же витрин,
+что и дашборды. Доступ — только по приглашению.
+
+**1. Создать бота.** В Telegram написать @BotFather → `/newbot` → получить токен.
+
+**2. Добавить в `.env`:**
+
+```
+TELEGRAM_BOT_TOKEN=123456:ABC...          # токен от BotFather
+TELEGRAM_ADMIN_IDS=123456789               # ваш Telegram ID (узнать: @userinfobot), можно несколько через запятую
+TELEGRAM_WEBAPP_URL=https://ваш-домен      # необязательно: Mini App работает только по https
+TELEGRAM_INVITE_HOURS=24                   # сколько живёт приглашение
+TELEGRAM_PROXY=socks5://host:port          # необязательно: если api.telegram.org закрыт провайдером
+```
+
+**3. PDF.** Один раз: `pip install -r requirements.txt && playwright install chromium`.
+
+**4. Миграции и запуск:**
+
+```
+python manage.py migrate
+python manage.py telegram_bot
+```
+
+На сервере — отдельной службой (systemd), чтобы бот поднимался после перезагрузки.
+
+Если при запуске «Нет связи с api.telegram.org» — адрес закрыт провайдером: включите VPN,
+задайте `TELEGRAM_PROXY` или запускайте бота на сервере, где Telegram доступен
+(проверка: `curl -m 10 https://api.telegram.org`). Для `socks5://` нужен `pip install "requests[socks]"`.
+
+**Приглашения.** Администратор пишет боту `/invite Микки` — получает одноразовую ссылку
+на сутки и пересылает её. Человек открывает ссылку, жмёт «Старт» — доступ есть.
+`/users` — кто подключён, `/revoke ID` — отключить. То же — в админке «Система → Telegram-бот».
+
+**Mini App.** Кнопка «📱 Приложение» появляется, когда задан `TELEGRAM_WEBAPP_URL` (https).
+Окно открывается по адресу `/tg/app/`, вход — по подписи Telegram, без пароля.
+В @BotFather можно ещё назначить его кнопкой меню: `/mybots → Bot Settings → Menu Button`.

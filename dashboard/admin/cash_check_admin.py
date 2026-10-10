@@ -31,6 +31,7 @@ OFF = Q(diff_cur__gte=0.01) | Q(diff_cur__lte=-0.01) | Q(gap_count__gt=0)
 GAP_JOINT = re.compile(r"стык (\d\d)\.(\d\d)→(\d\d)\.(\d\d)\.(\d{4}): остаток (-?[\d.]+) → (-?[\d.]+)")
 GAP_HOLE = re.compile(r"(?:нет выписок )?(\d\d\.\d\d\.\d{4})–(\d\d\.\d\d\.\d{4})$")
 GAP_LINES = re.compile(r"строки ≠ итогам: (.+) \(([+-][\d.]+)\)")
+GAP_CLOSED = re.compile(r"закрыт (\d\d\.\d\d\.\d{4}) с остатком (-?[\d.]+)")
 
 
 def explain(gaps: str, currency: str) -> tuple[list[str], list[tuple[str, str]]]:
@@ -61,6 +62,13 @@ def explain(gaps: str, currency: str) -> tuple[list[str], list[tuple[str, str]]]
                 f"задвоенные документы."
             )
             asks.append(("Та же выписка, выгруженная заново", f"за период файла «{name.rsplit('/', 1)[-1]}»"))
+        elif m := GAP_CLOSED.match(part):
+            day, rest = m.groups()
+            reasons.append(
+                f"Счёт отмечен закрытым с {day}, но по нашим данным на эту дату на нём "
+                f"{money2(float(rest))} {currency}: не хватает последних операций или выписки о закрытии."
+            )
+            asks.append((f"Выписка по счёту до закрытия ({day})", "и справка банка о закрытии счёта"))
         else:
             reasons.append(part)
             asks.append(("Выписка за период, указанный в причине", ""))

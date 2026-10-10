@@ -30,6 +30,7 @@ from core.reports.http import csv_response, xlsx_response
 from core.reports.xlsx import Book, Col, Row
 
 from ..models import CashBalanceDay, CashFlow, CpAudit
+from ..services import dds_book
 from .common import DashboardAdmin, chart, kpi, money, money_cell, stale_status
 
 ACCOUNT_FILTERS = (("bank_name", "Банк"), ("account_name", "Счёт"), ("currency", "Валюта"))
@@ -655,65 +656,8 @@ class CashFlowReportAdmin(DashboardAdmin):
         scope = base if year is None else base.filter(year=year)
         flows = scope.exclude(source="OPENING")
 
-        # --- расшифровка: статья → контрагент
-        groups = defaultdict(list)
-        for g in (flows.exclude(source="FX")
-                  .values("activity", "direction", "article_code", "article_name", "cf_code",
-                          "cf_name", "cp_name", "inn")
-                  .annotate(s=Sum("amount_rub"), n=Count("id")).order_by()):
-            groups[(g["activity"], g["direction"], g["cf_code"] or "", g["cf_name"] or "Не разнесено",
-                    g["article_name"] or "")].append(g)
-        detail = []
-        for key in sorted(groups, key=lambda k: (k[0] or 9, k[1] or 0, k[2])):
-            cps = sorted(groups[key], key=lambda g: -abs(g["s"] or 0))
-            detail.append(Row([
-                key[2], key[3] if key[3] == key[4] or not key[4] else f"{key[4]} → {key[3]}", "",
-                sum(g["n"] for g in cps), sum(g["s"] or 0 for g in cps),
-            ], level="warn" if key[0] == 9 else 3, collapsed=True))
-            detail += [
-                Row(["", g["cp_name"] or "без контрагента", g["inn"] or "", g["n"], g["s"]],
-                    outline=1, indent=2, hidden=True)
-                for g in cps
-            ]
-        sheet = book.sheet(
-            "Расшифровка", "Расшифровка статей по контрагентам",
-            subtitle="Статья → контрагенты по убыванию суммы. Слева кнопки «+» сворачивают контрагентов",
-            description="Каждая статья отчёта с разбивкой по контрагентам: сколько операций и на какую сумму",
-        )
-        sheet.table(
-            [Col("Код", kind="code", width=10), Col("Статья / контрагент", width=64, indent=True),
-             Col("ИНН", kind="code", width=14), Col("Операций", kind="int", width=11),
-             Col("Сумма, ₽", kind="money", width=18, total=True)],
-            detail,
-            freeze_cols=2,
-        )
-
-        # --- исходные строки
-        book.sheet(
-            "Операции", "Операции за период",
-            subtitle="Исходные строки отчёта: разноска, комиссии, проводки, курсовые разницы",
-            description="Плоская таблица всех операций периода — для фильтров и своих сводных",
-        ).table(
-            [Col("Дата", kind="date", width=12), Col("Счёт", width=28), Col("Банк", width=24),
-             Col("Валюта", width=8), Col("Тип", width=14), Col("Деятельность", width=18),
-             Col("Направление", width=13), Col("Код", kind="code", width=9), Col("Статья", width=30),
-             Col("Подстатья", width=30), Col("Контрагент", width=38), Col("ИНН", kind="code", width=13),
-             Col("Назначение платежа", width=70),
-             Col("Сумма, вал.", kind="money_dec", width=16), Col("Курс", kind="money_dec", width=10),
-             Col("Сумма, ₽", kind="money_dec", width=17, total=True)],
-            (
-                Row([o["date"], o["account_name"], o["bank_name"] or "", o["currency"],
-                     SOURCE_LABELS.get(o["source"], (o["source"],))[0], o["activity_name"],
-                     o["direction_name"], o["cf_code"] or "", o["article_name"] or "",
-                     o["cf_name"] or "", o["cp_name"] or "", o["inn"] or "",
-                     (o["description"] or "")[:500], o["amount_cur"], o["rate"], o["amount_rub"]])
-                for o in flows.order_by("date", "id").values(
-                    "date", "account_name", "bank_name", "currency", "source", "activity_name",
-                    "direction_name", "cf_code", "article_name", "cf_name", "cp_name", "inn",
-                    "description", "amount_cur", "rate", "amount_rub").iterator()
-            ),
-            autofilter=True,
-        )
+        # --- расшифровка, контрагенты, карточка, операции
+        dds_book.add_sheets(book, flows, year)
         return book
 
     # ------------------------------------------------------------------

@@ -3,3 +3,4 @@ from .cash_balance_model import CashBalance
 from .cash_balance_day_model import CashBalanceDay
 from .cash_check_model import CashCheck
 from .cp_audit_model import CpAudit
+from .fx_rate_model import FxRate

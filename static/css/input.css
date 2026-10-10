@@ -1686,3 +1686,11 @@ body:has(.pk-dash) div:has(> #result_list) { max-height: calc(100vh - 110px); ov
 body:has(.pk-dash) #result_list { overflow: visible; }
 body:has(.pk-dash) #result_list thead th { position: sticky; top: 0; z-index: 3; background: #fff; box-shadow: inset 0 -1px 0 var(--color-pk-line); }
 .dark body:has(.pk-dash) #result_list thead th, body.dark:has(.pk-dash) #result_list thead th { background: var(--color-base-900); }
+
+/* остатки по дням: год → месяц → день */
+.pk-bal-table .pk-bal-year th, .pk-bal-table .pk-bal-year td { background: var(--color-pk-pale); font-weight: 700; color: var(--color-pk-navy); }
+.pk-bal-table .pk-bal-month th, .pk-bal-table .pk-bal-month td { background: #f8fafb; font-weight: 600; }
+.pk-bal-table .pk-bal-day th, .pk-bal-table .pk-bal-day td { font-size: 12.5px; }
+.pk-bal-click { cursor: pointer; }
+.dark .pk-bal-table .pk-bal-year th, .dark .pk-bal-table .pk-bal-year td { background: var(--color-base-800); color: var(--color-pk-sky); }
+.dark .pk-bal-table .pk-bal-month th, .dark .pk-bal-table .pk-bal-month td { background: var(--color-base-900); }

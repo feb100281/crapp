@@ -56,6 +56,18 @@ class BankAccount(models.Model):
         verbose_name='Тип Счета'
     )
 
+    closed_on = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Закрыт с",
+        help_text="Дата закрытия. После неё счёт не показывается в остатках, отчётах и боте; "
+                  "история до этой даты сохраняется",
+    )
+
+    @property
+    def is_closed(self) -> bool:
+        return self.closed_on is not None
+
     class Meta:
         verbose_name = "Банковский счёт"
         verbose_name_plural = "Банковские счета"
