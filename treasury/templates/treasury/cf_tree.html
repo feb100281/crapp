@@ -54,6 +54,7 @@
                                     {% endif %}
                                     <span class="pk-cf-code">{{ r.code }}</span>
                                     {% if r.edit_url %}<a href="{{ r.edit_url }}">{{ r.name }}</a>{% else %}<span>{{ r.name }}</span>{% endif %}
+                                    {% if r.cp_url %}<a href="{{ r.cp_url }}" target="_blank" rel="noopener" class="pk-cf-link" title="Контрагенты этой подстатьи"><span class="material-symbols-outlined" style="font-size:18px;vertical-align:-4px">group</span></a>{% endif %}
                                     {% if r.reversible %}<span class="pk-chip pk-chip-warn" title="Принимает возвраты: встречные суммы уменьшают статью">± возвраты</span>{% endif %}
                                 </div>
                             </th>

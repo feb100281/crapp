@@ -444,8 +444,11 @@ def _sync_ic(existing: set) -> int:
     created = 0
     fx = dict(Fx.objects.values_list("numeric_code", "code"))
     fx["643"] = fx.get("643") or "RUB"
-    items = {code: item for code, item in CFItem.objects.filter(code__in=IC_ITEMS.values())
-             .values_list("code", "pk")}
+    items = {}
+    for item in CFItem.objects.filter(code__in=IC_ITEMS.values()).prefetch_related("children"):
+        # у статьи появились подстатьи — правило ставим на первую из них
+        subs = sorted(item.children.all(), key=lambda c: c.code)
+        items[item.code] = subs[0].pk if subs else item.pk
 
     pairs = _ic_lines().order_by().values_list("our_cur", "cp_cur", "direction").distinct()
     for our_cur, cp_cur, direction in pairs:

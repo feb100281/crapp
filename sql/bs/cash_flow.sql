@@ -26,7 +26,7 @@
 --   FX       — курсовая разница на остаток валютного счёта (по дням)
 --
 -- Результат конвертации (банк продаёт валюту не по курсу ЦБ) отдельной
--- строкой не выделяется: это Σ amount_rub по статьям 410200 + 420200
+-- строкой не выделяется: это Σ amount_rub по статьям 410200 + 420200 и их подстатьям
 -- (is_conversion = TRUE). Ноль там будет, только если курс банка = курсу ЦБ.
 -- ============================================================
 
@@ -140,7 +140,7 @@ SELECT
     i.article_code,
     COALESCE(i.article_name, 'Не разнесено') AS article_name,
     i.activity,
-    i.code IN ('410200', '420200')        AS is_conversion,
+    i.article_code IN ('410200', '420200') AS is_conversion,
     r.description,
     r.cp_name,
     r.inn_adjust                          AS inn
@@ -172,7 +172,7 @@ SELECT
     i.article_code,
     CASE WHEN g.kind = 'OPENING' THEN 'Остаток на начало' ELSE COALESCE(i.article_name, 'Не разнесено') END,
     i.activity,
-    COALESCE(i.code IN ('410200', '420200'), FALSE),
+    COALESCE(i.article_code IN ('410200', '420200'), FALSE),
     COALESCE(g.note, g.description),
     NULL,
     NULL

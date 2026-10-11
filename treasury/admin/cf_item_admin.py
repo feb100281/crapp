@@ -335,6 +335,7 @@ class CFItemAdmin(AppModelAdmin):
                 children.setdefault(item.parent_id, []).append(item)
         add_url = reverse("admin:treasury_cfitem_add")
         lines_url = reverse("admin:treasury_bsline_changelist")
+        cp_url = reverse("admin:dashboard_cpaudit_changelist")
         resolvers = _resolvers_by_item()
 
         def numbers(group):
@@ -354,6 +355,8 @@ class CFItemAdmin(AppModelAdmin):
                 "code": item.code, "name": item.name, "description": text,
                 "rules": rules, "allocs": allocs, "amount": money(amount) if amount else "",
                 "lines_url": f"{lines_url}?cf={item.pk}" if allocs else "",
+                # контрагенты подстатьи — дашборд «Контрагенты и статьи» с фильтром по статье
+                "cp_url": f"{cp_url}?item={item.pk}&view=all" if allocs and not subs else "",
                 "resolvers": sorted(used_by.values(), key=lambda r: (r["kind"], r["label"])),
                 "active": item.is_active, "children": bool(subs),
                 "reversible": item.reversible,
