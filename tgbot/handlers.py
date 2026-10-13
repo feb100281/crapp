@@ -64,6 +64,7 @@ def dds_caption(name: str, report: dict, year: int) -> str:
 class BotApp:
     def __init__(self, bot: Bot):
         self.bot = bot
+        bot.default_markup = self.menu()        # меню не пропадает: приходит с каждым ответом без своих кнопок
         self.last_kind: dict[int, str] = {}     # что пользователь смотрел последним
         self.cp_found: dict[int, list] = {}     # результаты поиска контрагента: индекс → ключ
 
@@ -130,10 +131,12 @@ class BotApp:
         if text.startswith("/start"):
             return self.start(chat, frm, text.partition(" ")[2].strip())
         if self.user(frm) is None:
-            return self.bot.send(chat, NO_ACCESS)
+            return self.bot.send(chat, NO_ACCESS, {"remove_keyboard": True})
         if text not in ("/help", "/menu") and conf.menu_version(chat) != self.menu_version():
             self.send_menu(chat, "🔄 Меню обновлено — новые кнопки внизу 👇")   # Telegram сам клавиатуру не обновляет
 
+        if text == "/menu":
+            return self.send_menu(chat, "Кнопки меню — внизу 👇")
         if text in ("/balance", BTN_BAL):
             return self.ask_date(chat, "bal")
         if text in ("/day", BTN_DAY):
@@ -235,7 +238,7 @@ class BotApp:
                 return self.bot.send(chat, "🔒 Ссылка-приглашение недействительна или уже использована. "
                                            "Попросите у администратора новую.")
         if user is None:
-            return self.bot.send(chat, NO_ACCESS)
+            return self.bot.send(chat, NO_ACCESS, {"remove_keyboard": True})
         self.help(chat, frm, hello=True)
 
     def help(self, chat: int, frm: dict, hello: bool = False) -> None:

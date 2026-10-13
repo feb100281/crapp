@@ -14,30 +14,41 @@ UNFOLD_SETTINGD = {
     "SHOW_BACK_BUTTON": True,
     "BORDER_RADIUS": "10px",
     "COLORS": {
-        # Палитра «Поклонка Плэйс» (см. reportstyleguide) — Navy как primary
-        # вместо стандартного фиолетового Unfold. base/font оставлены
-        # дефолтными (уже нейтральные и проверены в тёмной теме).
+        # Кобальт логотипа COSMORELAX как primary; base/font — дефолтные Unfold
         "primary": {
-            "50":  "#F4F8FA",  # Pale Soft
-            "100": "#EAF1F5",  # Pale
-            "200": "#D8E1E7",  # Line
-            "300": "#ADC3D0",
-            "400": "#6D97AC",  # Sky
-            "500": "#2F6B8A",  # Blue
-            "600": "#18324A",  # Navy — основной
-            "700": "#13293D",
-            "800": "#102436",  # Navy Dark
-            "900": "#0B1A28",
-            "950": "#07111B",
+            "50":  "#F6F8FD",
+            "100": "#EEF1FB",
+            "200": "#DFE4F1",
+            "300": "#B4C0EC",
+            "400": "#8193D9",
+            "500": "#3A57D2",
+            "600": "#102EA0",  # логотип
+            "700": "#0D2687",
+            "800": "#0B1F6A",
+            "900": "#081753",
+            "950": "#050E35",
         },
     },
     "STYLES": [
         lambda request: static("css/output.css"),
+        lambda request: static("css/cosmo.css"),
     ],
     "SIDEBAR": {
         "show_search": True,
         "show_all_applications": True,
         "navigation": [
+            {
+                "title": "Главная",
+                "separator": False,
+                "collapsible": False,
+                "items": [
+                    {
+                        "title": "Рабочий стол",
+                        "icon": "space_dashboard",
+                        "link": reverse_lazy("admin:index"),
+                    },
+                ],
+            },
             {
                 "title": "Система",
                 "separator": True,

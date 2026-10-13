@@ -25,6 +25,7 @@ class Bot:
             raise TelegramError("TELEGRAM_BOT_TOKEN не задан в .env")
         self.base = f"https://api.telegram.org/bot{token}/"
         self.http = session or requests.Session()
+        self.default_markup = None           # нижнее меню: прикрепляем к сообщениям без своих кнопок
         proxy = os.getenv("TELEGRAM_PROXY", "").strip()      # http://host:port или socks5://host:port
         if proxy:
             self.http.proxies = {"http": proxy, "https": proxy}
@@ -69,9 +70,12 @@ class Bot:
             raise TelegramError(f"getUpdates: {body.get('description')}")
         return body["result"]
 
+    def _markup(self, markup):
+        return markup if markup is not None else self.default_markup
+
     def send(self, chat_id: int, text: str, markup=None, **kw):
         return self.call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML",
-                         reply_markup=markup, disable_web_page_preview=True, **kw)
+                         reply_markup=self._markup(markup), disable_web_page_preview=True, **kw)
 
     def edit(self, chat_id: int, message_id: int, text: str, markup=None):
         return self.call("editMessageText", chat_id=chat_id, message_id=message_id, text=text,
@@ -91,8 +95,8 @@ class Bot:
 
     def photo(self, chat_id: int, filename: str, data: bytes, caption: str = "", markup=None):
         return self.call("sendPhoto", timeout=120, chat_id=chat_id, caption=caption or None, parse_mode="HTML",
-                         reply_markup=markup, files={"photo": (filename, data, "image/png")})
+                         reply_markup=self._markup(markup), files={"photo": (filename, data, "image/png")})
 
     def document(self, chat_id: int, filename: str, data: bytes, caption: str = "", mime: str = ""):
         return self.call("sendDocument", timeout=120, chat_id=chat_id, caption=caption or None,
-                         parse_mode="HTML", files={"document": (filename, data, mime or "application/octet-stream")})
+                         parse_mode="HTML", reply_markup=self._markup(None), files={"document": (filename, data, mime or "application/octet-stream")})

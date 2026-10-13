@@ -39,6 +39,7 @@ class Command(BaseCommand):
             return
         conf.remember_username(me.get("username", ""))
         bot.call("setMyCommands", commands=[
+            {"command": "menu", "description": "Показать кнопки меню"},
             {"command": "balance", "description": "Остатки на дату"},
             {"command": "day", "description": "Движение денег за день"},
             {"command": "dds", "description": "Отчёт ДДС за год в Excel"},

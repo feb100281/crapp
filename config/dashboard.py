@@ -1,13 +1,17 @@
 """
-Главная страница админки (DASHBOARD_CALLBACK Unfold): карточки-ссылки
-на дашборды с живыми цифрами из витрин. Пока витрины не построены
-(нет запуска «ДДС и переоценка») — карточки без цифр, со ссылками.
+Главная страница админки (DASHBOARD_CALLBACK Unfold): приветствие, остатки по
+месяцам, сводка из витрин, последние обновления, кто заходил, рабочие разделы
+и разделы в разработке. Пока витрины не построены — карточки без цифр.
 """
 
 from __future__ import annotations
 
 import json
 from datetime import timedelta
+
+from django.contrib.admin.models import LogEntry
+from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from django.db import DatabaseError
 from django.db.models import Q, Sum
@@ -47,6 +51,18 @@ def _cards() -> dict:
         "scales": {"x": {"display": False}, "y": {"display": False}},
     })
 
+    # --- остаток на конец месяца, 12 месяцев — столбики в приветствии
+    by_month = {}
+    for day, eb in (CashBalanceDay.objects.filter(date__gt=last.date - timedelta(days=366))
+                    .order_by("date").values_list("date", "eb_rub")):
+        by_month[(day.year, day.month)] = eb or 0
+    top = max(by_month.values(), default=0) or 1
+    months = [{"label": MONTHS[m - 1], "value": v, "text": _mln(v), "pct": max(4, round(100 * v / top)),
+               "now": (y, m) == (last.date.year, last.date.month)}
+              for (y, m), v in sorted(by_month.items())[-12:]]
+    peak = max(months, key=lambda x: x["value"]) if months else None
+    low = min(months, key=lambda x: x["value"]) if months else None
+
     # --- ДДС с начала года
     year = last.date.year
     cf = CashFlow.objects.filter(year=year).exclude(source="OPENING")
@@ -80,7 +96,64 @@ def _cards() -> dict:
         "checked": checked,
         "off": off,
         "gaps": gaps,
+        "months": months,
+        "now_text": _mln(last.eb_rub),
+        "peak": peak,
+        "low": low,
+        "unalloc": money(unalloc),
     }
+
+
+MONTHS = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+STATUS_ICON = {"DONE": "task_alt", "FAILED": "error", "RUNNING": "progress_activity", "PENDING": "schedule",
+               "CANCELED": "block", "INACTIVE": "radio_button_unchecked"}
+
+
+def _mln(value) -> str:
+    value = float(value or 0)
+    if abs(value) >= 1e6:
+        return f"{value / 1e6:.1f}".replace(".", ",") + " млн"
+    return f"{value / 1e3:.0f} тыс"
+
+
+def _updates() -> list[dict]:
+    """Последние события: запуски команд и правки в админке, по времени."""
+    from core.models.jobs import Jobs
+
+    items = []
+    for job in Jobs.objects.exclude(lastrun__isnull=True).order_by("-lastrun")[:5]:
+        items.append({"icon": STATUS_ICON.get(job.status, "bolt"), "bad": job.status == "FAILED",
+                      "text": job.name, "note": job.get_status_display().lower(), "at": job.lastrun})
+    for log in LogEntry.objects.select_related("user", "content_type").order_by("-action_time")[:30]:
+        who = log.user.get_full_name() or log.user.get_username()
+        verb = {1: "добавил(а)", 2: "изменил(а)", 3: "удалил(а)"}.get(log.action_flag, "изменил(а)")
+        items.append({"icon": "edit", "bad": False, "text": f"{who} {verb}: {log.object_repr[:70]}",
+                      "note": log.content_type.name if log.content_type else "", "at": log.action_time})
+    items.sort(key=lambda x: x["at"], reverse=True)
+    seen, out = set(), []
+    for item in items:                   # одна и та же правка подряд — одной строкой
+        if item["text"] not in seen:
+            seen.add(item["text"])
+            out.append(item)
+    return out[:6]
+
+
+def _visitors() -> list[dict]:
+    """Кто заходил: сайт и Telegram-бот."""
+    out = []
+    for u in get_user_model().objects.exclude(last_login__isnull=True).order_by("-last_login")[:5]:
+        out.append({"name": u.get_full_name() or u.get_username(), "where": "сайт", "icon": "person",
+                    "at": u.last_login})
+    try:
+        from tgbot.models import TgUser
+
+        for t in TgUser.objects.exclude(last_seen__isnull=True).order_by("-last_seen")[:5]:
+            out.append({"name": t.first_name or t.username or str(t.tg_id), "where": "Telegram", "icon": "send",
+                        "at": t.last_seen})
+    except DatabaseError:
+        pass
+    out.sort(key=lambda x: x["at"], reverse=True)
+    return out[:6]
 
 
 def dashboard_callback(request, context):
@@ -89,13 +162,45 @@ def dashboard_callback(request, context):
     except DatabaseError:  # витрины ещё не построены
         cards = {}
 
+    try:
+        updates, visitors = _updates(), _visitors()
+    except DatabaseError:
+        updates, visitors = [], []
+
     context.update({
         "cards": cards,
+        "updates": updates,
+        "visitors": visitors,
+        "now": timezone.localtime(),
+        "title": "Главная",
         "links": {
             "cash_flow": reverse("admin:dashboard_cashflow_changelist"),
             "balance": reverse("admin:dashboard_cashbalanceday_changelist"),
             "check": reverse("admin:dashboard_cashcheck_changelist"),
+            "cp_audit": reverse("admin:dashboard_cpaudit_changelist"),
+            "items": reverse("admin:treasury_cfitem_tree"),
+            "lines": reverse("admin:treasury_bsline_changelist"),
+            "jobs": reverse("admin:core_jobs_changelist"),
         },
+        # в разработке: (иконка, название, описание, метка)
+        "roadmap": [
+            ("point_of_sale", "Реализация", "Продажи по салонам, интернет-магазину и маркетплейсам: выручка, маржа, "
+             "средний чек", "в разработке"),
+            ("grid_view", "Матрица", "Ассортиментная матрица: что держать в наличии, ABC/XYZ по брендам и категориям",
+             "в разработке"),
+            ("warehouse", "Склады P&L", "Доходы и затраты каждого склада: хранение, логистика, оборачиваемость",
+             "скоро"),
+            ("donut_small", "Сегментный анализ", "Бренды, категории и каналы: кто приносит деньги, а кто съедает "
+             "маржу", "в разработке"),
+            ("trending_up", "Прогноз", "Деньги и выручка на 6 месяцев вперёд с учётом сезонности и платежей",
+             "в разработке"),
+        ],
+        "tips": [
+            ("ads_click", "Клик по сумме", "в отчёте ДДС открывает операции и контрагентов за период"),
+            ("add_box", "Плюсик у месяца", "раскрывает дни — в отчёте и в Excel"),
+            ("send", "Telegram-бот", "остатки, движение за день, ДДС и курсы — в телефоне"),
+            ("download", "Excel и PDF", "кнопки в шапке каждого отчёта; печать — для бухгалтера"),
+        ],
         "sections": [
             ("receipt", "Банковские выписки", "Загруженные выписки по счетам",
              reverse("admin:treasury_statement_changelist")),

@@ -50,7 +50,7 @@
                         x-on:click="Object.keys(open).forEach(k => open[k] = !/r/.test(k))">Свернуть статьи</button>
                 <span class="pk-cf-hint">Клик по месяцу в шапке — дни · клик по сумме — операции</span>
                 {% if days_open %}<a href="{{ days_reset }}" class="pk-seg-item">Свернуть все дни</a>{% endif %}
-                <a href="?{{ query_full }}&export=xlsx" class="pk-btn"><span class="material-symbols-outlined">download</span>Excel</a>
+                <a href="?{{ query_full }}&export=xlsx" class="pk-btn pk-btn-excel"><span class="material-symbols-outlined">download</span>Excel</a>
                 <a href="?{{ query_full }}&export=csv" class="pk-btn"><span class="material-symbols-outlined">download</span>CSV</a>
             </div>
             <div class="pk-cf-scroll">

@@ -1,0 +1,301 @@
+/* COSMORELAX — фирменные токены и главная страница. Подключается после output.css. */
+
+:root {
+    /* бренд: кобальт логотипа, чёрный текст, белый фон, песочный акцент */
+    --color-pk-navy: #0B1F6A;
+    --color-pk-navy-dark: #081753;
+    --color-pk-blue: #102EA0;
+    --color-pk-sky: #8193D9;
+    --color-pk-pale: #EEF1FB;
+    --color-pk-pale-soft: #F6F8FD;
+    --color-pk-ink: #10131C;
+    --color-pk-muted: #697186;
+    --color-pk-line: #DFE4F1;
+    --color-pk-gold: #B9965B;
+
+    --cx-blue: #102EA0;
+    --cx-blue-deep: #0A1D66;
+    --cx-ink: #10131C;
+    --cx-muted: #697186;
+    --cx-line: #E3E7F2;
+    --cx-soft: #F6F8FD;
+    --cx-card: #FFFFFF;
+    --cx-sand: #B9965B;
+    --cx-ok: #1A7A5E;
+    --cx-bad: #B5453B;
+    --cx-warn: #9A6A12;
+    --cx-r: 6px;
+}
+
+html.dark {
+    --cx-ink: #E8EBF4;
+    --cx-muted: #98A1B8;
+    --cx-line: #262C3D;
+    --cx-soft: #141927;
+    --cx-card: #0F1420;
+}
+
+/* ---------------------------------------------------------------- каркас */
+.cx-home { display: flex; flex-direction: column; gap: 18px; color: var(--cx-ink); }
+.cx-home a { text-decoration: none; }
+.cx-home .material-symbols-outlined { font-size: 20px; line-height: 1; }
+.cx-muted { color: var(--cx-muted); }
+.cx-neg { color: var(--cx-bad) !important; }
+
+/* ---------------------------------------------------------------- приветствие */
+.cx-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--cx-r);
+    background: linear-gradient(115deg, var(--cx-blue-deep) 0%, var(--cx-blue) 62%, #1C3CC0 100%);
+    color: #fff;
+    padding: 26px 30px 24px;
+}
+.cx-hero::after {                                   /* тонкая полоса логотипа снизу */
+    content: ""; position: absolute; left: 30px; right: 30px; bottom: 0; height: 3px; background: #fff; opacity: .9;
+}
+.cx-hero-mark {
+    position: absolute; right: -40px; top: -30px; width: 380px; height: 380px; opacity: .09; pointer-events: none;
+}
+.cx-hero-body { position: relative; max-width: 980px; }
+.cx-hero-logo { height: 18px; filter: brightness(0) invert(1); margin-bottom: 14px; display: block; }
+.cx-kicker { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #C4CEF5; }
+.cx-hero-title { margin: 6px 0 0; font-size: 24px; font-weight: 500; line-height: 1.25; color: #fff; letter-spacing: -.01em; }
+.cx-hero-title b { font-weight: 700; }
+.cx-hero-sub { margin: 6px 0 0; font-size: 13.5px; color: #D3DAF7; max-width: 640px; }
+
+.cx-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.cx-btn {
+    display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, .45); border-radius: 4px;
+    color: #fff !important; font-size: 13px; font-weight: 600; background: transparent;
+    transition: background .15s, border-color .15s;
+}
+.cx-btn .material-symbols-outlined { font-size: 18px; }
+.cx-btn:hover { background: rgba(255, 255, 255, .12); border-color: #fff; }
+.cx-btn-light { background: #fff; border-color: #fff; color: var(--cx-blue) !important; }
+.cx-btn-light:hover { background: #EEF1FB; }
+
+.cx-hero-panel {
+    margin-top: 20px; padding: 14px 16px 12px; border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 4px; background: rgba(5, 14, 53, .28); max-width: 760px;
+}
+.cx-hero-panel-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #D3DAF7; }
+.cx-hero-panel-head b { color: #fff; }
+.cx-hero-panel-head .material-symbols-outlined { font-size: 17px; color: #C4CEF5; }
+.cx-hero-panel-note { margin-top: 8px; font-size: 12px; color: #C4CEF5; }
+.cx-hero-panel-note b { color: #fff; font-weight: 600; }
+.cx-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.cx-bar { display: flex; flex-direction: column; }
+.cx-bar em { display: flex; align-items: flex-end; height: 64px; }
+.cx-bar i { display: block; width: 100%; background: rgba(255, 255, 255, .32); border-radius: 2px 2px 0 0; min-height: 3px; }
+.cx-bar span { margin-top: 5px; font-size: 10.5px; text-align: center; color: #AEBBEE; }
+.cx-bar-now i { background: #fff; }
+.cx-bar-now span { color: #fff; font-weight: 700; }
+
+/* ---------------------------------------------------------------- заголовки разделов */
+.cx-heading {
+    display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--cx-ink);
+}
+.cx-heading .material-symbols-outlined { color: var(--cx-blue); font-size: 19px; }
+html.dark .cx-heading .material-symbols-outlined { color: #8193D9; }
+.cx-heading-note { font-weight: 500; letter-spacing: .02em; text-transform: none; color: var(--cx-muted); font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- KPI */
+.cx-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cx-kpi {
+    display: flex; flex-direction: column; gap: 6px; padding: 16px 18px 16px;
+    background: var(--cx-card); border: 1px solid var(--cx-line); border-top: 3px solid var(--cx-blue);
+    border-radius: var(--cx-r); color: var(--cx-ink) !important; transition: box-shadow .15s, transform .15s;
+}
+.cx-kpi:hover { box-shadow: 0 10px 28px -16px rgba(16, 46, 160, .45); transform: translateY(-1px); }
+.cx-kpi-top { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.cx-arrow { margin-left: auto; color: var(--cx-muted); transition: transform .15s, color .15s; }
+.cx-kpi:hover .cx-arrow { transform: translateX(3px); color: var(--cx-blue); }
+.cx-kpi-value { margin-top: 6px; font-size: 24px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.cx-kpi-sub { font-size: 12.5px; color: var(--cx-muted); min-height: 18px; }
+
+.cx-icon {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 32px; height: 32px; border-radius: 4px; background: var(--cx-soft); color: var(--cx-blue);
+}
+html.dark .cx-icon { color: #8193D9; }
+
+.cx-chip {
+    align-self: flex-start; margin-top: 4px; padding: 3px 8px; border-radius: 3px;
+    font-size: 11.5px; font-weight: 600; background: var(--cx-soft); color: var(--cx-muted);
+}
+.cx-chip-ok { background: #E7F4EF; color: var(--cx-ok); }
+.cx-chip-bad { background: #FBECEA; color: var(--cx-bad); }
+.cx-chip-warn { background: #FBF2DF; color: var(--cx-warn); }
+html.dark .cx-chip-ok { background: #12332A; }
+html.dark .cx-chip-bad { background: #3A1A17; }
+html.dark .cx-chip-warn { background: #3A2C10; }
+
+/* ---------------------------------------------------------------- панели */
+.cx-panel { background: var(--cx-card); border: 1px solid var(--cx-line); border-radius: var(--cx-r); padding: 16px 18px; }
+.cx-panel-title {
+    display: flex; align-items: center; gap: 8px; padding-bottom: 10px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--cx-line); font-size: 13.5px; font-weight: 700;
+}
+.cx-panel-title .material-symbols-outlined { color: var(--cx-blue); font-size: 19px; }
+html.dark .cx-panel-title .material-symbols-outlined { color: #8193D9; }
+.cx-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--cx-blue); box-shadow: 0 0 0 4px rgba(16, 46, 160, .15); }
+.cx-two { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+.cx-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--cx-line); font-size: 13px; }
+.cx-row:last-child { border-bottom: 0; }
+.cx-row > .material-symbols-outlined { color: var(--cx-muted); font-size: 18px; }
+.cx-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-row-text em { font-style: normal; color: var(--cx-muted); }
+.cx-row-time { color: var(--cx-muted); font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12.5px; }
+.cx-empty { display: flex; gap: 12px; align-items: flex-start; font-size: 13px; }
+.cx-empty a { color: var(--cx-blue); font-weight: 600; }
+
+/* ---------------------------------------------------------------- плитки разделов */
+.cx-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.cx-tiles-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.cx-tile {
+    position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px;
+    background: var(--cx-card); border: 1px solid var(--cx-line); border-radius: var(--cx-r);
+    color: var(--cx-ink) !important; transition: border-color .15s, background .15s;
+}
+.cx-tile b { display: block; font-size: 13.5px; font-weight: 700; }
+.cx-tile b + span { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.4; color: var(--cx-muted); }
+a.cx-tile:hover { border-color: var(--cx-blue); background: var(--cx-soft); }
+.cx-tile-soon { background: var(--cx-soft); border-style: dashed; cursor: default; padding-top: 30px; }
+.cx-tile-soon .cx-icon { background: var(--cx-card); color: var(--cx-muted); }
+.cx-badge {
+    position: absolute; top: 10px; right: 10px; padding: 1px 6px; border-radius: 3px;
+    font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--cx-blue); background: #E4E9FA;
+}
+.cx-badge-soon { color: #fff; background: var(--cx-ink); }
+html.dark .cx-badge { background: #1C2547; color: #AEBBEE; }
+html.dark .cx-badge-soon { background: #E8EBF4; color: #10131C; }
+
+/* ---------------------------------------------------------------- советы */
+.cx-tips-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding-top: 10px; }
+.cx-tip { display: flex; gap: 10px; font-size: 12.5px; }
+.cx-tip .material-symbols-outlined { color: var(--cx-blue); }
+html.dark .cx-tip .material-symbols-outlined { color: #8193D9; }
+.cx-tip b { display: block; font-size: 13px; }
+.cx-tip span { color: var(--cx-muted); line-height: 1.4; }
+
+@media (max-width: 1400px) {
+    .cx-tiles-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1200px) {
+    .cx-kpis, .cx-tiles, .cx-tiles-5, .cx-tips-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cx-two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+    .cx-kpis, .cx-tiles, .cx-tiles-5, .cx-tips-grid { grid-template-columns: minmax(0, 1fr); }
+    .cx-hero { padding: 20px 16px 22px; }
+    .cx-hero::after { left: 16px; right: 16px; }
+    .cx-hero-mark { width: 220px; height: 220px; right: -60px; top: -40px; }
+    .cx-hero-title { font-size: 21px; }
+    .cx-hero-actions { gap: 6px; }
+    .cx-btn { height: 34px; padding: 0 10px; font-size: 12.5px; }
+    .cx-hero-panel { padding: 12px; }
+    .cx-hero-panel-head { flex-wrap: wrap; font-size: 12px; }
+    .cx-bars { gap: 3px; }
+    .cx-bar span { font-size: 9px; }
+    .cx-heading { flex-wrap: wrap; }
+    .cx-heading-note { flex-basis: 100%; }
+    .cx-kpi-value { font-size: 22px; }
+    .cx-row { gap: 8px; font-size: 12.5px; }
+    .cx-row-text em { display: none; }
+}
+
+/* ---------------------------------------------------------------- отчёты на телефоне */
+@media (max-width: 640px) {
+    .pk-chart-grid { grid-template-columns: minmax(0, 1fr); }
+    .pk-chart-head { flex-wrap: wrap; gap: 6px; }
+    .pk-seg { flex-wrap: wrap; max-width: 100%; }
+}
+
+/* =========================================================
+   Навигация: кнопка «Рабочий стол» в шапке каждой страницы
+   ========================================================= */
+.cx-homebtn {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    height: 30px; padding: 0 12px 0 9px; margin-right: 2px;
+    border: 1px solid var(--color-pk-line); border-radius: var(--cx-r);
+    background: var(--color-pk-pale-soft); color: var(--color-pk-blue);
+    font-size: 12.5px; font-weight: 600; line-height: 1; white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+.cx-homebtn .material-symbols-outlined { font-size: 18px; }
+.cx-homebtn:hover {
+    background: var(--color-pk-blue); border-color: var(--color-pk-blue); color: #fff;
+    box-shadow: 0 4px 12px -6px rgba(16, 46, 160, .55);
+}
+.cx-homebtn-sep { display: block; width: 1px; height: 20px; margin: 0 12px; background: var(--color-pk-line); flex: none; }
+.dark .cx-homebtn { background: rgba(129, 147, 217, .08); border-color: var(--color-base-700); color: var(--color-pk-sky); }
+.dark .cx-homebtn:hover { background: var(--color-pk-blue); border-color: var(--color-pk-blue); color: #fff; }
+.dark .cx-homebtn-sep { background: var(--color-base-700); }
+@media (max-width: 640px) {
+    .cx-homebtn { padding: 0; width: 30px; justify-content: center; }
+    .cx-homebtn-text { display: none; }
+    .cx-homebtn-sep { margin: 0 8px; }
+}
+
+/* =========================================================
+   Скачивание Excel — зелёная кнопка со значком таблицы
+   (класс .pk-btn-excel + все ссылки на выгрузку xlsx, включая
+   кнопки-действия unfold «Скачать Excel» / «Скачать правила»)
+   ========================================================= */
+:root { --cx-excel: #1D6F42; --cx-excel-dark: #155A35; }
+.pk-btn.pk-btn-excel,
+#content-main a.pk-btn.pk-btn-excel[href],
+a[href*="export-xlsx"], a[href*="export-rules"] {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--cx-excel) !important; border-color: var(--cx-excel) !important;
+    color: #fff !important; font-weight: 600; border-radius: var(--cx-r);
+    box-shadow: 0 3px 10px -6px rgba(29, 111, 66, .7);
+}
+.pk-btn.pk-btn-excel:hover,
+#content-main a.pk-btn.pk-btn-excel[href]:hover,
+a[href*="export-xlsx"]:hover, a[href*="export-rules"]:hover {
+    background: var(--cx-excel-dark) !important; border-color: var(--cx-excel-dark) !important; color: #fff !important;
+}
+/* вместо стрелки «download» — значок листа Excel */
+.pk-btn-excel > .material-symbols-outlined,
+a[href*="export-xlsx"] .material-symbols-outlined,
+a[href*="export-rules"] .material-symbols-outlined { display: none; }
+.pk-btn-excel::before,
+a[href*="export-xlsx"]::before, a[href*="export-rules"]::before {
+    content: ""; flex: none; width: 16px; height: 16px; background: currentColor;
+    -webkit-mask: var(--cx-xls-icon) center / contain no-repeat;
+            mask: var(--cx-xls-icon) center / contain no-repeat;
+}
+:root {
+    --cx-xls-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 2.5h8.5L19.5 7.5V20a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5z' fill='none' stroke='%23000' stroke-width='1.7' stroke-linejoin='round'/%3E%3Cpath d='M14 2.8V8h5.2' fill='none' stroke='%23000' stroke-width='1.7' stroke-linejoin='round'/%3E%3Cpath d='M8.6 11.6l6.2 6.6M14.8 11.6l-6.2 6.6' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.dark .pk-btn.pk-btn-excel, .dark a[href*="export-xlsx"], .dark a[href*="export-rules"] {
+    background: #1F7A4A !important; border-color: #1F7A4A !important;
+}
+
+/* =========================================================
+   Плашки-заголовки дашбордов — в одном стиле с главной:
+   кобальтовый градиент, тонкая белая линия, знак «C» справа
+   ========================================================= */
+.pk-hero {
+    position: relative; overflow: hidden;
+    background: linear-gradient(115deg, var(--cx-blue-deep) 0%, var(--cx-blue) 62%, #1C3CC0 100%);
+    border-bottom: 0; border-radius: var(--cx-r);
+    padding: 22px 28px 24px;
+}
+.pk-hero::after {
+    content: ""; position: absolute; left: 28px; right: 28px; bottom: 0; height: 3px; background: #fff; opacity: .9;
+}
+
+.pk-hero-kicker { color: rgba(255,255,255,.72); letter-spacing: .12em; }
+.pk-hero-sub { color: rgba(255,255,255,.78); }
+.pk-hero-title em, .pk-hero-title .pk-hero-accent { color: #C9D3F5; }
+@media (max-width: 640px) {
+    .pk-hero { padding: 18px 16px 20px; }
+    .pk-hero::after { left: 16px; right: 16px; }
+    .pk-dash .pk-hero-title { font-size: 22px; }
+}

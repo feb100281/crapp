@@ -1,6 +1,6 @@
 {% extends 'admin/base.html' %}
 
-{% load i18n unfold %}
+{% load i18n unfold static %}
 
 {% block title %}
     {% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}
@@ -11,149 +11,174 @@
 {% endblock %}
 
 {% block content %}
-<div class="pk-home">
+<div class="cx-home">
 
-    {# --- приветствие --- #}
-    <div class="pk-hero">
-        <div class="pk-hero-kicker">COSMORELAX · Управленческий дашборд</div>
-        <h1 class="pk-hero-title">
-            <span id="pk-greet">Добро пожаловать</span>,
-            <span class="pk-hero-accent">{{ request.user.first_name|default:request.user.username }}</span>!
-        </h1>
-        <p class="pk-hero-sub">
-            Казначейство и управленческий учёт ООО «Космо»: банковские выписки, движение денег,
-            остатки и главная книга — в одном месте.
-        </p>
-    </div>
+    {# ---------------- приветствие ---------------- #}
+    <section class="cx-hero">
+        <svg class="cx-hero-mark" viewBox="0 0 400 400" aria-hidden="true">
+            <defs><mask id="cx-c"><rect width="400" height="400" fill="#fff"/>
+                <ellipse cx="200" cy="160" rx="62" ry="44" fill="#000"/>
+                <rect x="200" y="142" width="200" height="36" fill="#000"/></mask></defs>
+            <ellipse cx="200" cy="160" rx="150" ry="104" fill="#fff" mask="url(#cx-c)"/>
+            <rect x="86" y="300" width="230" height="36" fill="#fff"/>
+        </svg>
 
-    {# --- дашборды --- #}
-    <div class="pk-home-heading">
-        <span class="material-symbols-outlined">monitoring</span>
-        Дашборды
-        {% if cards %}<span class="pk-home-asof">данные по выпискам на {{ cards.date|date:"d.m.Y" }}</span>{% endif %}
-    </div>
+        <div class="cx-hero-body">
+            <img src="{% static 'img/logo.svg' %}" alt="COSMORELAX" class="cx-hero-logo">
+            <div class="cx-kicker">Деньги · казначейство · управленческий учёт</div>
+            <h1 class="cx-hero-title"><span id="cx-greet">Добро пожаловать</span>, <b>{{ request.user.first_name|default:request.user.username }}</b></h1>
+            <p class="cx-hero-sub">Выписки банков, движение денег, остатки и сверка — в одном месте.
+                Цифры обновляются при каждом импорте выписок.</p>
 
-    <div class="pk-dash-cards">
-
-        {# Остатки #}
-        <a href="{{ links.balance }}" class="pk-dash-card">
-            <div class="pk-dash-card-top">
-                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>
-                <span class="pk-dash-card-title">Остатки по дням</span>
-                <span class="material-symbols-outlined pk-dash-card-arrow">arrow_forward</span>
+            <div class="cx-hero-actions">
+                <a href="{{ links.cash_flow }}" class="cx-btn cx-btn-light"><span class="material-symbols-outlined">table_chart</span>Отчёт ДДС</a>
+                <a href="{{ links.balance }}" class="cx-btn"><span class="material-symbols-outlined">account_balance_wallet</span>Остатки</a>
+                <a href="{{ links.check }}" class="cx-btn"><span class="material-symbols-outlined">fact_check</span>Сверка</a>
+                <a href="{{ links.cp_audit }}" class="cx-btn"><span class="material-symbols-outlined">manage_search</span>Контрагенты</a>
+                <a href="{{ links.items }}" class="cx-btn"><span class="material-symbols-outlined">account_tree</span>Статьи ДДС</a>
             </div>
-            {% if cards %}
-                <div class="pk-dash-card-value">{{ cards.balance }} ₽</div>
-                <div class="pk-dash-card-sub">деньги на всех счетах на {{ cards.date|date:"d.m.Y" }}</div>
-                <div class="pk-dash-card-spark">
-                    {% include "unfold/components/chart/line.html" with data=cards.spark options=cards.spark_options %}
+
+            {% if cards.months %}
+            <div class="cx-hero-panel">
+                <div class="cx-hero-panel-head">
+                    <span class="material-symbols-outlined">calendar_month</span>
+                    Остаток денег на конец месяца · 12 месяцев · сейчас <b>{{ cards.now_text }} ₽</b>
                 </div>
-                {% if cards.stale %}
-                    <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">report</span>{{ cards.stale }} счетов без свежей выписки · {{ cards.stale_rub }} ₽</span>
-                {% else %}
-                    <span class="pk-chip pk-chip-ok"><span class="material-symbols-outlined">verified</span>выписки актуальны</span>
-                {% endif %}
-            {% else %}
-                <div class="pk-dash-card-sub">Остаток по всем счетам день за днём, раскрытие по счетам и операциям.</div>
-            {% endif %}
-        </a>
-
-        {# ДДС #}
-        <a href="{{ links.cash_flow }}" class="pk-dash-card">
-            <div class="pk-dash-card-top">
-                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">table_chart</span></span>
-                <span class="pk-dash-card-title">Отчёт ДДС</span>
-                <span class="material-symbols-outlined pk-dash-card-arrow">arrow_forward</span>
-            </div>
-            {% if cards %}
-                <div class="pk-dash-card-value{% if cards.net_neg %} pk-kpi-neg{% else %} pk-kpi-pos{% endif %}">{{ cards.net }} ₽</div>
-                <div class="pk-dash-card-sub">чистый денежный поток с начала {{ cards.year|stringformat:"d" }} года</div>
-                <div class="pk-dash-card-rows">
-                    <div><span>Поступления</span><b class="pk-kpi-pos">{{ cards.inflow }}</b></div>
-                    <div><span>Выплаты</span><b class="pk-kpi-neg">{{ cards.outflow }}</b></div>
+                <div class="cx-bars">
+                    {% for m in cards.months %}
+                        <div class="cx-bar{% if m.now %} cx-bar-now{% endif %}" title="{{ m.label }}: {{ m.text }} ₽">
+                            <em><i style="height: {{ m.pct }}%"></i></em>
+                            <span>{{ m.label }}</span>
+                        </div>
+                    {% endfor %}
                 </div>
-                <span class="pk-chip {% if cards.unalloc_pct != '0' %}pk-chip-warn{% else %}pk-chip-ok{% endif %}">
-                    <span class="material-symbols-outlined">rule</span>не разнесено {{ cards.unalloc_pct }}% оборота
-                </span>
-            {% else %}
-                <div class="pk-dash-card-sub">Деятельность → статья × месяцы, клик по сумме — операции.</div>
-            {% endif %}
-        </a>
-
-        {# Сверка #}
-        <a href="{{ links.check }}" class="pk-dash-card">
-            <div class="pk-dash-card-top">
-                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">fact_check</span></span>
-                <span class="pk-dash-card-title">Сверка с банком</span>
-                <span class="material-symbols-outlined pk-dash-card-arrow">arrow_forward</span>
+                <div class="cx-hero-panel-note">
+                    максимум — <b>{{ cards.peak.label }}</b> ({{ cards.peak.text }} ₽) · минимум — <b>{{ cards.low.label }}</b> ({{ cards.low.text }} ₽)
+                </div>
             </div>
-            {% if cards %}
-                {% if cards.off %}
-                    <div class="pk-dash-card-value pk-kpi-neg">{{ cards.off }} из {{ cards.checked }}</div>
-                    <div class="pk-dash-card-sub">счетов не сходятся с остатком последней выписки</div>
-                    {% if cards.gaps %}
-                        <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">event_busy</span>разрывы в выписках: {{ cards.gaps }} счетов</span>
-                    {% else %}
-                        <span class="pk-chip pk-chip-bad"><span class="material-symbols-outlined">report</span>нужна проверка</span>
-                    {% endif %}
-                {% else %}
-                    <div class="pk-dash-card-value pk-kpi-pos">Всё сходится</div>
-                    <div class="pk-dash-card-sub">с остатками последних выписок, счетов: {{ cards.checked }}</div>
-                    <span class="pk-chip pk-chip-ok"><span class="material-symbols-outlined">verified</span>пропусков выписок нет</span>
-                {% endif %}
-            {% else %}
-                <div class="pk-dash-card-sub">Наш расчёт против конечного остатка последней выписки и пропуски между выписками.</div>
             {% endif %}
-        </a>
-    </div>
-
-    {% if not cards %}
-        <div class="pk-callout">
-            <div class="pk-callout-label">Цифр пока нет</div>
-            <div class="pk-callout-body">
-                Витрины строятся командой «ДДС и переоценка» (или импортом выписок) — запустите её
-                в разделе «Команды», и здесь появятся остатки, поток и сверка.
-            </div>
         </div>
+    </section>
+
+    {# ---------------- сводка ---------------- #}
+    <div class="cx-heading">
+        <span class="material-symbols-outlined">monitoring</span>Сводка
+        {% if cards %}<span class="cx-heading-note">с начала {{ cards.year|stringformat:"d" }} года · данные по выпискам на {{ cards.date|date:"d.m.Y" }}</span>{% endif %}
+    </div>
+
+    {% if cards %}
+    <div class="cx-kpis">
+        <a href="{{ links.balance }}" class="cx-kpi">
+            <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>Деньги на счетах<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
+            <div class="cx-kpi-value">{{ cards.balance }} ₽</div>
+            <div class="cx-kpi-sub">на {{ cards.date|date:"d.m.Y" }}, все банки и валюты в рублях</div>
+            {% if cards.stale %}<span class="cx-chip cx-chip-bad">{{ cards.stale }} счетов без свежей выписки</span>
+            {% else %}<span class="cx-chip cx-chip-ok">выписки актуальны</span>{% endif %}
+        </a>
+
+        <a href="{{ links.cash_flow }}" class="cx-kpi">
+            <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">swap_vert</span></span>Чистый поток<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
+            <div class="cx-kpi-value{% if cards.net_neg %} cx-neg{% endif %}">{{ cards.net }} ₽</div>
+            <div class="cx-kpi-sub">поступления {{ cards.inflow }} · выплаты {{ cards.outflow }}</div>
+            <span class="cx-chip">отчёт ДДС по месяцам и дням</span>
+        </a>
+
+        <a href="{{ links.lines }}?alloc=no" class="cx-kpi">
+            <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">rule</span></span>Не разнесено<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
+            <div class="cx-kpi-value">{{ cards.unalloc_pct }}%</div>
+            <div class="cx-kpi-sub">оборота с начала года · {{ cards.unalloc }} ₽</div>
+            {% if cards.unalloc_pct == "0" %}<span class="cx-chip cx-chip-ok">всё разнесено</span>
+            {% else %}<span class="cx-chip cx-chip-warn">нужны резолверы</span>{% endif %}
+        </a>
+
+        <a href="{{ links.check }}" class="cx-kpi">
+            <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">fact_check</span></span>Сверка с банком<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
+            {% if cards.off %}
+                <div class="cx-kpi-value cx-neg">{{ cards.off }} из {{ cards.checked }}</div>
+                <div class="cx-kpi-sub">счетов не сходятся с остатком последней выписки</div>
+                <span class="cx-chip cx-chip-bad">{% if cards.gaps %}разрывы в выписках: {{ cards.gaps }}{% else %}нужна проверка{% endif %}</span>
+            {% else %}
+                <div class="cx-kpi-value">Всё сходится</div>
+                <div class="cx-kpi-sub">с остатками последних выписок · счетов {{ cards.checked }}</div>
+                <span class="cx-chip cx-chip-ok">пропусков выписок нет</span>
+            {% endif %}
+        </a>
+    </div>
+    {% else %}
+    <div class="cx-panel cx-empty">
+        <span class="material-symbols-outlined">hourglass_empty</span>
+        <div><b>Цифр пока нет.</b> Витрины строит команда «ДДС и переоценка» (или импорт выписок) — запустите её
+            в разделе <a href="{{ links.jobs }}">«Команды»</a>, и здесь появятся остатки, поток и сверка.</div>
+    </div>
     {% endif %}
 
-    {# --- разделы --- #}
-    <div class="pk-home-heading">
-        <span class="material-symbols-outlined">apps</span>
-        Рабочие разделы
+    {# ---------------- обновления и визиты ---------------- #}
+    <div class="cx-two">
+        <div class="cx-panel">
+            <div class="cx-panel-title"><span class="material-symbols-outlined">update</span>Последние обновления</div>
+            {% for u in updates %}
+                <div class="cx-row">
+                    <span class="material-symbols-outlined{% if u.bad %} cx-neg{% endif %}">{{ u.icon }}</span>
+                    <span class="cx-row-text">{{ u.text }}{% if u.note %} <em>· {{ u.note }}</em>{% endif %}</span>
+                    <span class="cx-row-time">{{ u.at|date:"d.m H:i" }}</span>
+                </div>
+            {% empty %}
+                <div class="cx-row cx-muted">Пока ничего не запускали</div>
+            {% endfor %}
+        </div>
+        <div class="cx-panel">
+            <div class="cx-panel-title"><span class="cx-dot"></span>Кто заходил</div>
+            {% for v in visitors %}
+                <div class="cx-row">
+                    <span class="material-symbols-outlined">{{ v.icon }}</span>
+                    <span class="cx-row-text">{{ v.name }} <em>· {{ v.where }}</em></span>
+                    <span class="cx-row-time">{{ v.at|date:"d.m H:i" }}</span>
+                </div>
+            {% empty %}
+                <div class="cx-row cx-muted">Пока никого</div>
+            {% endfor %}
+        </div>
     </div>
 
-    <div class="pk-link-cards">
+    {# ---------------- рабочие разделы ---------------- #}
+    <div class="cx-heading"><span class="material-symbols-outlined">apps</span>Рабочие разделы</div>
+    <div class="cx-tiles cx-tiles-5">
         {% for icon, title, sub, url in sections %}
-            <a href="{{ url }}" class="pk-link-card">
-                <span class="pk-dash-card-icon"><span class="material-symbols-outlined">{{ icon }}</span></span>
-                <span>
-                    <span class="pk-link-card-title">{{ title }}</span>
-                    <span class="pk-link-card-sub">{{ sub }}</span>
-                </span>
+            <a href="{{ url }}" class="cx-tile">
+                <span class="cx-icon"><span class="material-symbols-outlined">{{ icon }}</span></span>
+                <span><b>{{ title }}</b><span>{{ sub }}</span></span>
             </a>
         {% endfor %}
     </div>
 
-    {# --- как это работает --- #}
-    <div class="pk-card">
-        <div class="pk-section-heading">
-            <span class="pk-section-number">↻</span>
-            <span class="pk-section-title">Как обновляются данные</span>
+    {# ---------------- в разработке ---------------- #}
+    <div class="cx-heading"><span class="material-symbols-outlined">construction</span>В разработке
+        <span class="cx-heading-note">следующие разделы управленческой отчётности</span></div>
+    <div class="cx-tiles cx-tiles-5">
+        {% for icon, title, sub, badge in roadmap %}
+            <div class="cx-tile cx-tile-soon">
+                <span class="cx-icon"><span class="material-symbols-outlined">{{ icon }}</span></span>
+                <i class="cx-badge{% if badge == 'скоро' %} cx-badge-soon{% endif %}">{{ badge }}</i>
+                <span><b>{{ title }}</b><span>{{ sub }}</span></span>
+            </div>
+        {% endfor %}
+    </div>
+
+    {# ---------------- как работать ---------------- #}
+    <div class="cx-panel cx-tips">
+        <div class="cx-panel-title"><span class="material-symbols-outlined">help</span>Как работать с отчётами</div>
+        <div class="cx-tips-grid">
+            {% for icon, title, sub in tips %}
+                <div class="cx-tip"><span class="material-symbols-outlined">{{ icon }}</span><div><b>{{ title }}</b><span>{{ sub }}</span></div></div>
+            {% endfor %}
         </div>
-        <ol class="pk-flow">
-            <li><b>Выписки</b> из банков (1С-формат) — команда «Выписки»: новые строки добавляются, повторы не задваиваются.</li>
-            <li><b>Разноска</b> по статьям ДДС — сначала резолверы контрагентов, затем КБК, счета контрагентов и «между своими»; ручная разноска не перезаписывается.</li>
-            <li><b>Курсы ЦБ и переоценка</b> — валютные счета в рублях, курсовые разницы по дням.</li>
-            <li><b>Витрины дашбордов</b> пересобираются целиком: ДДС, остатки, сверка.</li>
-        </ol>
     </div>
 
 </div>
 <script>
     (() => {
         const h = new Date().getHours();
-        const el = document.getElementById("pk-greet");
+        const el = document.getElementById("cx-greet");
         if (el) el.textContent = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
     })();
 </script>

@@ -26,7 +26,7 @@ from dashboard.services import cp_render, cp_report, day_render, day_report, dds
 
 from . import conf
 from .api import Bot, TelegramError
-from .handlers import XLSX, data_span, dds_caption
+from .handlers import XLSX, BotApp, data_span, dds_caption
 from .models import TgUser
 
 MAX_AGE = 24 * 3600
@@ -204,6 +204,7 @@ def api_send(request):
         return _deny()
     kind, fmt, on = request.POST.get("kind"), request.POST.get("fmt"), _date(request)
     bot = Bot(conf.token())
+    bot.default_markup = BotApp.menu()
     try:
         if kind == "dds":
             year = int(request.POST.get("year") or 0) or max(dds_export.years() or [0])

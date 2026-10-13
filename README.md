@@ -216,6 +216,7 @@ TELEGRAM_PROXY=socks5://host:port          # необязательно: есл�
 **4. Миграции и запуск:**
 
 ```
+source .venv/bin/activate && python manage.py runserver
 python manage.py migrate
 python manage.py telegram_bot
 ```

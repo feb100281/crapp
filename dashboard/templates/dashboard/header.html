@@ -16,7 +16,7 @@
                 <a href="{{ url }}" class="pk-btn pk-btn-primary" target="_blank" rel="noopener"><span class="material-symbols-outlined">print</span>{{ label }}</a>
             {% endfor %}
             {% for label, url in dash.exports %}
-                <a href="{{ url }}" class="pk-btn"><span class="material-symbols-outlined">download</span>{{ label }}</a>
+                <a href="{{ url }}" class="pk-btn{% if label == 'Excel' %} pk-btn-excel{% endif %}"><span class="material-symbols-outlined">download</span>{{ label }}</a>
             {% endfor %}
         </div>
     {% endif %}
