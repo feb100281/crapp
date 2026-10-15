@@ -17,8 +17,9 @@ from django.db.models import Max, Min
 from django.utils import timezone
 
 from dashboard.models import CashBalance
-from dashboard.admin.common import money2
-from dashboard.services import cp_check, cp_render, cp_report, day_render, day_report, dds_export, fx_report
+from dashboard.admin.common import money, money2
+from dashboard.services import (cp_check, cp_render, cp_report, day_render, day_report, dds_export, fx_report,
+                                month_compare, pay_search)
 
 from . import conf
 from .api import Bot, TelegramError
@@ -33,6 +34,8 @@ BTN_DDS = "📊 Отчёт ДДС"
 BTN_CP = "💸 Оплаты контрагента"
 BTN_FX = "💱 Курсы"
 BTN_CHK = "🛡 Проверка контрагента"
+BTN_CMP = "📈 Месяц к месяцу"
+BTN_PAY = "🔍 Поиск платежей"
 BTN_APP = "📱 Приложение"
 KINDS = {"bal": "Остатки на дату", "day": "Движение денег за день"}
 NO_ACCESS = "🔒 Доступ к боту — по приглашению. Попросите ссылку у администратора."
@@ -41,6 +44,12 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 def esc(text) -> str:
     return html.escape(str(text or ""), quote=False)
+
+
+def plural(n: int, one: str, few: str, many: str) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return one
+    return few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
 
 
 def data_span() -> tuple[date | None, date | None]:
@@ -67,6 +76,7 @@ class BotApp:
         bot.default_markup = self.menu()        # меню не пропадает: приходит с каждым ответом без своих кнопок
         self.last_kind: dict[int, str] = {}     # что пользователь смотрел последним
         self.cp_found: dict[int, list] = {}     # результаты поиска контрагента: индекс → ключ
+        self.pay_q: dict[int, str] = {}         # последний запрос поиска платежей
 
     # ------------------------------------------------------------------ доступ
 
@@ -90,7 +100,8 @@ class BotApp:
     def menu() -> dict:
         rows = [[{"text": BTN_BAL}, {"text": BTN_DAY}],
                 [{"text": BTN_CP}, {"text": BTN_CHK}],
-                [{"text": BTN_DDS}, {"text": BTN_FX}]]
+                [{"text": BTN_DDS}, {"text": BTN_FX}],
+                [{"text": BTN_CMP}, {"text": BTN_PAY}]]
         app = conf.webapp_url()
         if app:
             rows.append([{"text": BTN_APP, "web_app": {"url": f"{app}/tg/app/"}}])
@@ -153,14 +164,30 @@ class BotApp:
             return self.bot.send(chat, "🛡 Напишите <b>ИНН</b> (10 или 12 цифр) или <b>название</b> — "
                                        "покажу карточку из ЕГРЮЛ, на что обратить внимание и наши расчёты с ним.")
         if text in ("/dds", BTN_DDS):
+            self.last_kind.pop(chat, None)
             return self.dds_menu(chat)
         if text in ("/fx", BTN_FX):
+            self.last_kind.pop(chat, None)
             return self.fx_menu(chat)
+        if text in ("/compare", BTN_CMP):
+            self.last_kind.pop(chat, None)
+            return self.compare(chat)
+        if text in ("/pay", BTN_PAY) or text.startswith("/pay "):
+            self.last_kind[chat] = "pay"
+            arg = text.partition(" ")[2].strip() if text.startswith("/pay ") else ""
+            if arg:
+                return self.pay(chat, arg)
+            return self.bot.send(chat, "🔍 Напишите, что искать:\n"
+                                       "• слово из назначения или названия — <b>аренда</b>, <b>лужники</b>\n"
+                                       "• сумму — <b>45000</b> или <b>45 000,50</b>\n"
+                                       "• ИНН — 10 или 12 цифр")
         if text in ("/help", "/menu"):
             return self.help(chat, frm)
 
         if self.last_kind.get(chat) == "chk" and len(text) >= 2 and not text.startswith("/"):
             return self.check_query(chat, text)
+        if self.last_kind.get(chat) == "pay" and len(text) >= 2 and not text.startswith("/"):
+            return self.pay(chat, text)
 
         on = parse(text)
         if on:
@@ -217,6 +244,10 @@ class BotApp:
             return self.fx_file(chat, kind, int(arg or 90))
         if head == "fx":                         # курс: kind=валюта, arg=дней
             return self.fx(chat, kind, int(arg or 90))
+        if head == "mc":                         # месяц к месяцу: kind=ГГГГ-ММ, arg=1 — к дате
+            return self.compare(chat, kind, arg == "1", edit=mid)
+        if head == "ps":                         # поиск платежей: Excel по последнему запросу
+            return self.pay_file(chat)
 
     # ------------------------------------------------------------------ вход
 
@@ -255,6 +286,8 @@ class BotApp:
                   f"{BTN_DDS} — отчёт о движении денег за год в Excel, как на сайте",
                   f"{BTN_CP} — сколько заплатили контрагенту и сколько он нам",
                   f"{BTN_FX} — курсы ЦБ, график и выводы",
+                  f"{BTN_CMP} — месяц к прошлому: итоги и статьи, которые изменились сильнее всего",
+                  f"{BTN_PAY} — поиск операций по слову, сумме или ИНН, список в Excel",
                   "", "Дату можно просто написать: <b>02.10</b> или <b>вчера</b>. "
                       "Любой другой текст — поиск контрагента."]
         if conf.webapp_url():
@@ -476,3 +509,116 @@ class BotApp:
             self.cp_found[chat] = [f"inn:{p['inn'] if p else inn}"]
             rows.insert(0, [{"text": "💸 Наши оплаты подробно", "callback_data": "p:0:a"}])
         self.bot.send(chat, cp_check.text(p, our, inn, note), {"inline_keyboard": rows})
+
+    # ------------------------------------------------------------------ месяц к месяцу
+
+    @staticmethod
+    def _pct(cur: float, prev: float) -> str:
+        p = month_compare.pct(cur, prev)
+        return f"{p:+.0f}%".replace("-", "−") if p is not None else ""
+
+    def compare(self, chat: int, period: str | None = None, mtd: bool = False, edit: int | None = None) -> None:
+        last = month_compare.last_date()
+        if last is None:
+            return self.bot.send(chat, "Данных пока нет — витрины не построены.")
+        r = month_compare.build(period or month_compare.default_period(last), mtd)
+        cur, prev = r["cur"], r["prev"]
+        a, b = r["prev_short"], r["short"]
+
+        def pair(p: float, c: float, signed: bool = False) -> str:
+            fmt = (lambda v: money(v, signed=True)) if signed else (lambda v: money(abs(v)))
+            return f"      {a} {fmt(p)} → {b} <b>{fmt(c)}</b> ₽"
+
+        lines = [f"📈 <b>{r['title']}</b> в сравнении с {r['with_prev']}"]
+        if r["partial"]:
+            lines.append(f"<i>Одинаковые дни: {r['d1']:%d.%m}–{r['d2']:%d.%m.%Y} и "
+                         f"{r['p1']:%d.%m}–{r['p2']:%d.%m.%Y}</i>")
+        lines += ["",
+                  f"Поступления {self._pct(cur['inflow'], prev['inflow'])}",
+                  pair(prev["inflow"], cur["inflow"]),
+                  f"Выплаты {self._pct(cur['outflow'], prev['outflow'])}",
+                  pair(prev["outflow"], cur["outflow"]),
+                  "Чистый поток",
+                  pair(prev["net"], cur["net"], signed=True)]
+        if r["changes"]:
+            lines += ["", "<b>Сильнее всего изменились</b>"]
+            for c in r["changes"]:
+                good = (c["delta"] < 0) if c["out"] else (c["delta"] > 0)
+                dot, arrow = ("🟢" if good else "🔴"), ("↑" if c["delta"] > 0 else "↓")
+                if abs(c["prev"]) < 1:
+                    tail = "новое"
+                elif abs(c["cur"]) < 1:
+                    tail = "в этом месяце нет"
+                else:
+                    tail = f"{c['pct']:+.0f}%".replace("-", "−")
+                kind = "расход" if c["out"] else "приход"
+                lines.append(f"{dot} {esc(c['name'])} <i>({kind})</i>  {arrow} {tail}\n"
+                             f"{pair(c['prev'], c['cur'])}")
+        else:
+            lines += ["", "По статьям изменений нет."]
+        lines.append("\n<i>Без переводов между своими счетами и курсовых разниц.</i>")
+
+        nav = []
+        if r["has_prev"]:
+            nav.append({"text": f"‹ {r['prev_title']}", "callback_data": f"mc:{r['prev_period']}:0"})
+        if r["next_period"]:
+            nav.append({"text": "месяц ›", "callback_data": f"mc:{r['next_period']}:0"})
+        rows = [nav] if nav else []
+        cur_month = f"{last.year}-{last.month:02d}"
+        if r["period"] != cur_month:
+            rows.append([{"text": f"📅 {month_compare.MONTHS[last.month]} по {last:%d.%m} — к тем же дням",
+                          "callback_data": f"mc:{cur_month}:1"}])
+        text = "\n".join(lines)
+        if edit:
+            try:
+                return self.bot.edit(chat, edit, text, {"inline_keyboard": rows})
+            except TelegramError:
+                pass
+        self.bot.send(chat, text, {"inline_keyboard": rows})
+
+    # ------------------------------------------------------------------ поиск платежей
+
+    @staticmethod
+    def _signed(value: float | None, cur: str = "₽") -> str:
+        v = value or 0.0
+        return f"{'−' if v < 0 else '+'}{money2(abs(v))} {cur}"
+
+    def pay(self, chat: int, text: str) -> None:
+        self.bot.typing(chat, "typing")
+        r = pay_search.search(text)
+        if r is None:
+            return self.bot.send(chat, "Напишите хотя бы 3 буквы, сумму или ИНН.")
+        if not r["count"]:
+            return self.bot.send(chat, f"🔍 По запросу {esc(r['label'])} операций не нашлось.\n"
+                                       "Попробуйте другое слово или часть названия.")
+        self.pay_q[chat] = text
+        head = (f"🔍 {esc(r['label'])}: <b>{r['count']}</b> "
+                f"{plural(r['count'], 'операция', 'операции', 'операций')}"
+                f"{' (показаны первые ' + str(pay_search.LIMIT) + ')' if r['capped'] else ''}\n"
+                f"<i>{r['first']:%d.%m.%Y} — {r['last']:%d.%m.%Y}</i>\n"
+                f"Получили: <b>{money(r['inflow'])}</b> ₽ · Заплатили: <b>{money(abs(r['outflow']))}</b> ₽")
+        items = []
+        for o in r["ops"][:10]:
+            amount = self._signed(o["amount_rub"])
+            if o["currency"] and o["currency"] != "RUB":
+                amount = f"{self._signed(o['amount_cur'], o['currency'])} (≈{money(abs(o['amount_rub'] or 0))} ₽)"
+            desc = (o["description"] or "").strip()
+            parts = [f"{o['date']:%d.%m.%Y} · <b>{amount}</b>",
+                     f"🏢 <b>{esc((o['cp_name'] or 'Без контрагента')[:80])}</b>"]
+            if o["article_name"]:
+                parts.append(f"📂 {esc(o['article_name'])}")
+            if desc:
+                parts.append(f"<i>{esc(desc[:100])}{'…' if len(desc) > 100 else ''}</i>")
+            items.append("\n".join(parts))
+        more = f"\n\n<i>Показаны последние 10. Все {r['count']} — в Excel.</i>" if r["count"] > 10 else ""
+        self.bot.send(chat, head + "\n\n" + "\n\n".join(items) + more,
+                      {"inline_keyboard": [[{"text": f"📊 Excel — все {r['count']}", "callback_data": "ps:x"}]]})
+
+    def pay_file(self, chat: int) -> None:
+        q = self.pay_q.get(chat)
+        r = pay_search.search(q) if q else None
+        if not r or not r["count"]:
+            return self.bot.send(chat, "Поиск устарел — напишите запрос ещё раз.")
+        self.bot.typing(chat, "upload_document")
+        name = f"Поиск платежей {q[:40]}".replace("/", " ").replace('"', "")
+        self.bot.document(chat, f"{name}.xlsx", pay_search.book(r).save(), mime=XLSX)

@@ -46,6 +46,8 @@ class Command(BaseCommand):
             {"command": "cp", "description": "Оплаты контрагента"},
             {"command": "check", "description": "Проверка контрагента по ИНН"},
             {"command": "fx", "description": "Курсы валют"},
+            {"command": "compare", "description": "Месяц к прошлому месяцу"},
+            {"command": "pay", "description": "Поиск платежей по слову, сумме или ИНН"},
             {"command": "help", "description": "Что умеет бот"},
         ])
         for method, field, text in (
