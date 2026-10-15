@@ -69,6 +69,20 @@ SOURCE_LABELS = {
 }
 
 OPS_LIMIT = 500  # строк в модалке — крупнейшие по модулю
+CP_OPTIONS_LIMIT = 300  # контрагентов в выпадающем списке модалки
+
+
+def _text_q(text: str) -> Q:
+    """Поиск по контрагенту, ИНН и назначению. SQLite не сравнивает кириллицу без учёта регистра,
+    поэтому перебираем варианты написания."""
+    cond = Q()
+    for v in {text, text.lower(), text.upper(), text.capitalize(), text.title()}:
+        cond |= Q(cp_name__contains=v) | Q(inn__contains=v) | Q(description__contains=v)
+    return cond
+
+
+def _cp_key(inn, name) -> str:
+    return f"{inn or ''}|{name or ''}"
 
 AUDIT_FIELDS = ("line_id", "direction", "inn", "cp_name", "cf_code", "manual", "is_open",
                 "rule_resolver_id", "rule_kind", "kbk_resolver_id", "ba_resolver_id", "cp_resolver_id")
@@ -668,7 +682,7 @@ class CashFlowReportAdmin(DashboardAdmin):
         params = {**flt, "y": ALL if year is None else year, "b": bucket, **drill}
         return reverse("admin:dashboard_cashflow_ops") + "?" + urlencode(params)
 
-    def _ops_by_cp(self, request, qs, period, here):
+    def _ops_by_cp(self, request, qs, period, here, tools):
         """Та же выборка, свёрнутая по контрагентам."""
         groups = list(
             qs.values("inn", "cp_name")
@@ -695,7 +709,7 @@ class CashFlowReportAdmin(DashboardAdmin):
             x["in_cell"] = money_cell(x["inflow"]) if x["inflow"] else ""
             x["out_cell"] = money_cell(x["outflow"], signed=True) if x["outflow"] else ""
             x["share"] = f"{100 * abs(x['s'] or 0) / abs(total):.1f} %" if total else ""
-            x["url"] = here(cpk=f"{x['inn'] or ''}|{x['cp_name'] or ''}")
+            x["url"] = here(cpk=_cp_key(x["inn"], x["cp_name"]))
 
         first = qs.first()
         g = request.GET
@@ -709,6 +723,7 @@ class CashFlowReportAdmin(DashboardAdmin):
             title = "Контрагенты"
 
         return render(request, "dashboard/cf_ops_modal.html", {
+            **tools,
             "view": "cp",
             "ops_url": here(),
             "cp_url": here(v="cp"),
@@ -727,6 +742,29 @@ class CashFlowReportAdmin(DashboardAdmin):
                 kpi("Итого", total, "", signed=True),
             ],
         })
+
+    @staticmethod
+    def _ops_tools(g, qs, cp_key) -> dict:
+        """Панель модалки: выбор контрагента и поиск; скрытые поля сохраняют текущий срез."""
+        groups = list(qs.values("inn", "cp_name").annotate(s=Sum("amount_rub"), n=Count("id")).order_by())
+        groups.sort(key=lambda x: -abs(x["s"] or 0))
+        options = []
+        for x in groups[:CP_OPTIONS_LIMIT]:
+            key = _cp_key(x["inn"], x["cp_name"])
+            label = x["cp_name"] or (f"ИНН {x['inn']}" if x["inn"] else "Без контрагента")
+            options.append((key, f"{label} · {money(x['s'] or 0)} ₽", key == cp_key))
+        if cp_key and not any(o[2] for o in options):
+            inn, _, name = cp_key.partition("|")
+            options.insert(0, (cp_key, name or inn or "Без контрагента", True))
+        return {
+            "q": (g.get("q") or "").strip(),
+            "cp_key": cp_key or "",
+            "cp_options": options,
+            "cp_total": len(groups),
+            "cp_more": max(len(groups) - CP_OPTIONS_LIMIT, 0),
+            "form_url": reverse("admin:dashboard_cashflow_ops"),
+            "form_params": [(k, v) for k, v in g.items() if k not in ("q", "cpk", "export")],
+        }
 
     def ops_view(self, request):
         g = request.GET
@@ -753,7 +791,10 @@ class CashFlowReportAdmin(DashboardAdmin):
 
         # переключатель «Операции / Контрагенты» и отбор по одному контрагенту
         view = "cp" if g.get("v") == "cp" else "ops"
-        cp_key = g.get("cpk")
+        cp_key = g.get("cpk") or None
+        tools = self._ops_tools(g, qs, cp_key)
+        if tools["q"]:
+            qs = qs.filter(_text_q(tools["q"]))
         cp_label = ""
         if cp_key is not None:
             inn, _, name = cp_key.partition("|")
@@ -771,7 +812,7 @@ class CashFlowReportAdmin(DashboardAdmin):
             return reverse("admin:dashboard_cashflow_ops") + "?" + q.urlencode()
 
         if view == "cp":
-            return self._ops_by_cp(request, qs, period, here)
+            return self._ops_by_cp(request, qs, period, here, tools)
 
         if g.get("export") == "csv":
             return csv_response(
@@ -818,6 +859,7 @@ class CashFlowReportAdmin(DashboardAdmin):
         if cp_label:
             title = f"{title} · {cp_label}"
         return render(request, "dashboard/cf_ops_modal.html", {
+            **tools,
             "view": "ops",
             "ops_url": here(),
             "cp_url": here(v="cp"),

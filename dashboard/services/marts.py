@@ -15,6 +15,9 @@ CP_AUDIT_TABLE = "dashboard_cp_audit"
 
 
 def refresh_cp_audit() -> None:
+    from cp.admin.services.titles import refresh_titles
+
+    refresh_titles(full=False)          # новые названия из выписок
     sql = SQLHelpers().read("bs", "cp_audit_mart.sql")
     statements = [s.strip() for s in sql.split(";")]
     with transaction.atomic(), connection.cursor() as cur:

@@ -80,6 +80,15 @@ class CP(models.Model):
         verbose_name="Наименование",
     )
 
+    title = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Название для отчётов",
+        help_text="Как контрагент называется в дашбордах, Excel и боте. "
+                  "Пусто — заполнится автоматически из наименования.",
+    )
+
     address = models.TextField(
         blank=True,
         null=True,

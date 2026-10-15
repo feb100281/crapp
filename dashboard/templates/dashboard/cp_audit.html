@@ -75,10 +75,10 @@
                                         <span class="material-symbols-outlined">chevron_right</span>
                                     </span>
                                     <span class="pk-field-stack">
-                                        <span class="pk-audit-title" title="{{ row.name }}">{{ row.name|default:"—" }}</span>
+                                        <span class="pk-audit-title" title="{{ row.title }}&#10;В выписке: {{ row.name }}">{{ row.title|default:"—" }}</span>
                                         <span class="pk-field-sub">
                                             {% if row.mode == "inn" %}ИНН {{ row.inn }}{% else %}по названию{% if row.inn %} · ИНН {{ row.inn }} общий{% endif %}{% endif %}
-                                            {% if row.pinned %} · <b>закреплён</b>{% endif %}
+                                            {% if row.pinned %} · <b>закреплён</b>{% endif %}{% if row.edit_url %}<a href="{{ row.edit_url }}" target="_blank" rel="noopener" class="pk-audit-edit" style="margin-left:6px" title="Переименовать: «Название для отчётов» в справочнике" x-on:click.stop><span class="material-symbols-outlined">edit</span> переименовать</a>{% endif %}
                                         </span>
                                     </span>
                                 </div>
@@ -135,7 +135,7 @@
                                                     <a href="{{ use.ops_url }}" target="_blank" rel="noopener">операции</a>
                                                     {% if use.item_id %}
                                                         <form method="post" action="{{ pin_action }}" class="pk-inline-form"
-                                                              onsubmit="return confirm('Все платежи контрагента «{{ row.name|escapejs }}» → «{{ use.name|escapejs }}»? Разнесённое руками не изменится.')">
+                                                              onsubmit="return confirm('Все платежи контрагента «{{ row.title|escapejs }}» → «{{ use.name|escapejs }}»? Разнесённое руками не изменится.')">
                                                             {% csrf_token %}
                                                             <input type="hidden" name="inn" value="{{ row.inn }}">
                                                             <input type="hidden" name="name" value="{{ row.name }}">

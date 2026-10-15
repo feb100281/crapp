@@ -105,6 +105,8 @@ GROUP BY date;
 --         списано» из её же шапки (дубли, задвоенные документы в файле банка).
 --         Только для выписок, которые не пересекаются с другими по этому счёту.
 --       – закрытый счёт с ненулевым остатком на дату закрытия.
+--     Если остаток сошёлся с банком, разрывы (кроме закрытого счёта) учтены
+--     проводками: gap_count = 0, текст в gaps остаётся для справки.
 --     gap_amount — сколько расхождения (расчёт − банк) объясняют эти разрывы.
 --   • внутренняя арифметика отчёта (начало + ДДС = конец) — колонка check_rub.
 CREATE OR REPLACE TABLE target_db.dashboard_cash_check AS
@@ -188,6 +190,7 @@ gaps AS (
     SELECT
         ba_id,
         count(*) AS gap_count,
+        count(*) FILTER (WHERE note LIKE 'закрыт %') AS closed_count,
         string_agg(note, '; ' ORDER BY on_day) AS gaps,
         sum(impact) AS gap_amount
     FROM (SELECT * FROM breaks UNION ALL SELECT * FROM mismatch UNION ALL SELECT * FROM closed)
@@ -206,7 +209,9 @@ SELECT
     round(c.base_eb, 2)                         AS calc_eb,
     round(c.base_eb - l.bank_eb, 2)             AS diff_cur,
     round((c.base_eb - l.bank_eb) * c.rate, 2)  AS diff_rub,
-    COALESCE(gp.gap_count, 0)                   AS gap_count,
+    -- остаток сошёлся (разрыв закрыт проводкой) — разрыв не считается, текст остаётся
+    CASE WHEN abs(c.base_eb - l.bank_eb) < 0.01 THEN COALESCE(gp.closed_count, 0)
+         ELSE COALESCE(gp.gap_count, 0) END     AS gap_count,
     gp.gaps,
     round(gp.gap_amount, 2)                     AS gap_amount,
     k.opening_rub,

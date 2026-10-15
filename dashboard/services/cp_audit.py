@@ -5,8 +5,8 @@
 увидеть ошибку разноски: контрагент почти всегда идёт на одну статью,
 а пару раз — на другую. Иногда это правильно (несколько услуг), иногда нет.
 
-Контрагент = ИНН + направление; если ИНН нет или он общий (больше 5 разных
-названий на ИНН — физлица с ИНН банка) — название, регистр не важен.
+Контрагент = ИНН + направление. Без ИНН и физлица со счетом в банке (там ИНН
+банка) — по очищенному названию (cp_title из витрины).
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ KIND_LABELS = {"CP": "контрагент", "KBK": "КБК", "BA": "счёт", 
 
 def norm_name(value) -> str:
     return " ".join(str(value or "").split()).upper()
+
 
 
 @dataclass
@@ -65,6 +66,13 @@ class CpRow:
     amount: float = 0.0
     pinned: bool = False
     suspect: bool = False
+    titles: dict = field(default_factory=lambda: defaultdict(int))  # как показываем
+
+    @property
+    def title(self) -> str:
+        if self.titles:
+            return max(self.titles.items(), key=lambda kv: kv[1])[0]
+        return norm_name(self.name)
 
     @property
     def item_list(self) -> list[ItemUse]:
@@ -83,19 +91,10 @@ class CpRow:
         return self.amount + self.open_amount
 
 
-def shared_inns(qs=None) -> set[str]:
-    names = defaultdict(set)
-    pairs = (qs or CpAudit.objects.all()).exclude(inn__isnull=True).exclude(inn="") \
-        .order_by().values_list("inn", "cp_name").distinct()
-    for inn, name in pairs:
-        names[inn].add(norm_name(name))
-    return {inn for inn, found in names.items() if len(found) > SHARED_INN_NAMES}
-
-
-def cp_key(inn, name, shared: set[str]) -> tuple[str, str]:
-    if inn and inn not in shared:
+def cp_key(inn, title, by_name) -> tuple[str, str]:
+    if inn and not by_name:
         return "inn", inn
-    return "name", norm_name(name)
+    return "name", norm_name(title)
 
 
 def scope(*, direction=None, year=None, ba=None, q="") -> Q:
@@ -107,16 +106,15 @@ def scope(*, direction=None, year=None, ba=None, q="") -> Q:
     if ba:
         cond &= Q(ba_key=ba)
     if q:
-        cond &= Q(cp_name__icontains=q) | Q(inn__startswith=q)
+        cond &= Q(cp_title__contains=q.strip().upper()) | Q(inn__startswith=q.strip())  # названия хранятся заглавными
     return cond
 
 
 def build(*, direction=None, year=None, ba=None, q="", item_id=None) -> list[CpRow]:
-    shared = shared_inns()
     rows: dict[tuple, CpRow] = {}
 
-    def row_for(inn, name, d) -> CpRow:
-        mode, key = cp_key(inn, name, shared)
+    def row_for(inn, title, by_name, name, d) -> CpRow:
+        mode, key = cp_key(inn, title or name, by_name)
         row = rows.get((mode, key, d))
         if row is None:
             row = rows[(mode, key, d)] = CpRow(mode, key, inn or "", name or "", d)
@@ -124,15 +122,17 @@ def build(*, direction=None, year=None, ba=None, q="", item_id=None) -> list[CpR
 
     groups = (
         CpAudit.objects.filter(scope(direction=direction, year=year, ba=ba, q=q)).order_by()
-        .values("inn", "cp_name", "direction", "is_open", "cf_item_id", "cf_code", "cf_name",
+        .values("inn", "cp_name", "cp_title", "by_name", "direction", "is_open", "cf_item_id", "cf_code", "cf_name",
                 "article_code", "article_name",
                 "manual", "rule_resolver_id", "rule_kind", "kbk", "ba_key",
                 "kbk_resolver_id", "ba_resolver_id", "cp_resolver_id")
         .annotate(n=Count("id"), s=Sum("amount"), d1=Min("date"), d2=Max("date"))
     )
     for g in groups:
-        row = row_for(g["inn"], g["cp_name"], g["direction"])
+        row = row_for(g["inn"], g["cp_title"], g["by_name"], g["cp_name"], g["direction"])
         row.names[g["cp_name"] or ""] += g["n"]
+        if g["cp_title"]:
+            row.titles[g["cp_title"]] += g["n"]
         if g["cp_resolver_id"] or g["rule_kind"] == "CP":
             row.pinned = True
 
@@ -218,11 +218,11 @@ def stats(rows: list[CpRow]) -> dict:
 
 
 def cp_lines(mode: str, inn: str, name: str, direction: int, *, year=None, ba=None):
-    """Строки витрины одного контрагента."""
+    """Строки витрины одного контрагента; name — ключ строки дашборда (название для отчётов)."""
     qs = CpAudit.objects.filter(scope(direction=direction, year=year, ba=ba))
     if mode == "inn":
-        return qs.filter(inn=inn)
+        return qs.filter(inn=inn, by_name=False)
     target = norm_name(name)
-    names = [n for n in qs.order_by().values_list("cp_name", flat=True).distinct()
-             if norm_name(n) == target]
-    return qs.filter(cp_name__in=names)
+    titles = [n for n in qs.filter(Q(by_name=True) | Q(inn__isnull=True)).order_by()
+              .values_list("cp_title", flat=True).distinct() if norm_name(n) == target]
+    return qs.filter(Q(by_name=True) | Q(inn__isnull=True), cp_title__in=titles)

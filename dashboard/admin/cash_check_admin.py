@@ -9,14 +9,17 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from datetime import date, timedelta
 
 from django.contrib import admin
+from django.db import DatabaseError
 from django.db.models import Count, Max, Q, Sum
 from django.shortcuts import render
 from django.urls import path, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import mark_safe
+from unfold.contrib.filters.admin import DropdownFilter
 from unfold.decorators import display
 
 from core.admins.badges import Badge
@@ -90,6 +93,24 @@ class StatusFilter(admin.SimpleListFilter):
         return queryset
 
 
+class AccountFilter(DropdownFilter):
+    title = "Счёт"
+    parameter_name = "ba_number"
+
+    def lookups(self, request, model_admin):
+        try:
+            rows = list(CashCheck.objects.order_by("account_name", "ba_number")
+                        .values_list("ba_number", "account_name").distinct())
+        except DatabaseError:
+            return []
+        names = Counter(name for _, name in rows)
+        # одинаковые названия различаем полным номером счёта
+        return [(num, f"{name} · {num}" if names[name] > 1 else (name or num)) for num, name in rows]
+
+    def queryset(self, request, queryset):
+        return queryset.filter(ba_number=self.value()) if self.value() else queryset
+
+
 @admin.register(CashCheck)
 class CashCheckAdmin(DashboardAdmin):
     list_display = [
@@ -105,7 +126,8 @@ class CashCheckAdmin(DashboardAdmin):
     ordering = ["id"]
     list_per_page = 100
 
-    list_filter = [StatusFilter, value_filter("bank_name", "Банк"), value_filter("currency", "Валюта")]
+    list_filter = [StatusFilter, value_filter("bank_name", "Банк"), value_filter("currency", "Валюта"),
+                   AccountFilter]
 
     @display(description="Последняя выписка", ordering="stmt_to")
     def stmt_display(self, obj):
@@ -116,8 +138,8 @@ class CashCheckAdmin(DashboardAdmin):
 
     @display(description="Остаток по банку", ordering="bank_eb")
     def bank_display(self, obj):
-        return format_html('{}<div class="pk-mini-note pk-num">{}</div>',
-                           money_cell(obj.bank_eb), obj.currency or "")
+        # валюта уже в названии счёта — вторую строку не добавляем, чтобы суммы стояли в ряд
+        return money_cell(obj.bank_eb)
 
     @display(description="Наш расчёт", ordering="calc_eb")
     def calc_display(self, obj):
@@ -134,7 +156,10 @@ class CashCheckAdmin(DashboardAdmin):
     @display(description="Разрывы в выписках")
     def gaps_display(self, obj):
         if not obj.gap_count:
-            return ""
+            if not obj.gaps:
+                return ""
+            return format_html('<div class="pk-mini-note">{}</div><div class="pk-mini-note">учтено проводкой</div>',
+                               obj.gaps)
         chips = format_html_join("", '<div><span class="pk-chip pk-chip-bad">{}</span></div>',
                                  ((g,) for g in (obj.gaps or "").split("; ")))
         return format_html('{}<div class="pk-mini-note">объясняет {} {}</div>',

@@ -15,7 +15,7 @@
 --   BANK     — разноска строки выписки (BSLineAlloc)
 --   UNALLOC  — строка выписки (или её неразнесённый остаток) без статьи
 --   FEE      — комиссия, удержанная банком из поступления → 121103
---   DEBT     — «с уч. гаш. долга», удержанное банком из эквайринга → 121104 (банковские комиссии)
+--   DEBT     — «с уч. гаш. долга», удержанное банком из эквайринга → 121103 «Эквайринг и СБП»
 --
 -- Удержания раскладываются ЗДЕСЬ, автоматически: поступление показывается
 -- gross (сумма строки + удержанное), а удержанное — отдельной выплатой.
@@ -58,9 +58,22 @@ WITH ln_src AS (
         CASE WHEN l.direction = 1
              THEN COALESCE(l.debt_cr::DOUBLE, 0) ELSE 0 END AS debt,
         l.description,
-        l.cp_name,
+        -- имя: «Название для отчётов» из справочника по inn_adjust; без ИНН,
+        -- не найден в DaData и счёт физлица с ИНН банка — очищенное из выписки
+        CASE
+            WHEN (left(COALESCE(l.cp_ba, ''), 5) IN ('40817', '40820')
+                  OR left(COALESCE(l.cp_ba, ''), 3) = '423')
+                 AND length(l.inn_adjust) = 10
+            THEN COALESCE(t.title, upper(trim(l.cp_name)))
+            WHEN NULLIF(trim(cp.title), '') IS NOT NULL THEN cp.title
+            WHEN NULLIF(trim(cp.name), '') IS NULL OR cp.updated_at IS NULL
+            THEN COALESCE(t.title, upper(trim(l.cp_name)))
+            ELSE cp.name
+        END                             AS cp_name,
         l.inn_adjust
     FROM target_db.treasury_bsline l
+    LEFT JOIN target_db.cp_cp cp ON cp.inn = l.inn_adjust
+    LEFT JOIN target_db.cp_name_title t ON t.raw = l.cp_name
 ),
 alloc AS (
     SELECT
@@ -116,9 +129,9 @@ flows_raw AS (
 
     UNION ALL
 
-    -- удержанное из эквайринга «в счёт долга» → 121104 «Удержания банка из эквайринга»
+    -- удержанное из эквайринга «в счёт долга» → 121103 «Эквайринг и СБП»
     SELECT 'DEBT', ln.id, NULL,
-           ln.ba_id, ln.d, (SELECT id FROM cf_items WHERE code = '121104'),
+           ln.ba_id, ln.d, (SELECT id FROM cf_items WHERE code = '121103'),
            -ln.debt,
            ln.description, ln.cp_name, ln.inn_adjust
     FROM ln_src ln

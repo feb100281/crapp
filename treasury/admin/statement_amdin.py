@@ -5,11 +5,59 @@ from __future__ import annotations
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 
+from unfold.contrib.filters.admin import DropdownFilter, RangeDateFilter
 from unfold.decorators import display
 
 from core.admins.base_admin import AppModelAdmin
 
 from ..models.statement_model import Statement
+
+
+def _short(number: str | None) -> str:
+    return f"...{number[-6:]}" if number else "—"
+
+
+class BankFilter(DropdownFilter):
+    title = "Банк"
+    parameter_name = "bank"
+
+    def lookups(self, request, model_admin):
+        rows = (Statement.objects.filter(ba_account__bank__isnull=False)
+                .values_list("ba_account__bank_id", "ba_account__bank__name").distinct())
+        return sorted({(str(pk), name or "—") for pk, name in rows}, key=lambda r: r[1])
+
+    def queryset(self, request, queryset):
+        return queryset.filter(ba_account__bank_id=self.value()) if self.value() else queryset
+
+
+class AccountFilter(DropdownFilter):
+    title = "Счёт"
+    parameter_name = "acc"
+
+    def lookups(self, request, model_admin):
+        rows = (Statement.objects.filter(ba_account__isnull=False)
+                .values_list("ba_account_id", "ba_account__number", "ba_account__bank__name").distinct())
+        items = {(str(pk), f"{_short(num)} · {bank or '—'}") for pk, num, bank in rows}
+        return sorted(items, key=lambda r: r[1])
+
+    def queryset(self, request, queryset):
+        return queryset.filter(ba_account_id=self.value()) if self.value() else queryset
+
+
+class CurrencyFilter(DropdownFilter):
+    title = "Валюта"
+    parameter_name = "cur"
+
+    def lookups(self, request, model_admin):
+        from macro.models import Fx
+
+        ids = (Statement.objects.filter(ba_account__currency__isnull=False)
+               .values_list("ba_account__currency_id", flat=True).distinct())
+        return sorted(((str(fx.pk), str(fx)) for fx in Fx.objects.filter(pk__in=list(ids))),
+                      key=lambda r: r[1])
+
+    def queryset(self, request, queryset):
+        return queryset.filter(ba_account__currency_id=self.value()) if self.value() else queryset
 
 
 @admin.register(Statement)
@@ -27,6 +75,9 @@ class SatatemnetAdmin(AppModelAdmin):
     ]
 
     ordering = ["-date_to"]
+
+    list_filter = [BankFilter, AccountFilter, CurrencyFilter, ("date_to", RangeDateFilter)]
+    list_filter_submit = True
 
     search_fields = [
         "ba_number",

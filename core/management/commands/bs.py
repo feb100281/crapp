@@ -16,6 +16,10 @@ from treasury.models.statement_model import Statement
 from macro.models.fx_model import Fx
 
 
+PDF_DIR = "ВЫПИСКИ БЕЗ txt"   # папка с PDF внутри папки выписок
+PDF_OUT = "txt из PDF"        # сюда пишутся готовые txt
+
+
 # ============================================================
 # Хелперы
 # ============================================================
@@ -303,6 +307,19 @@ class Command(BaseCommand):
 
                 writelog(log, f"    - Getting data from {source}")
                 writelog(log, line)
+
+                # PDF-выписки без txt: сначала делаем из них txt в формате 1С
+                pdf_dir = source / params.get("pdf", PDF_DIR)
+                if pdf_dir.is_dir():
+                    writelog(log, f"PDF → TXT: {pdf_dir}")
+                    try:
+                        from treasury.services.pdf_statements import convert_folder
+                    except ImportError:
+                        writelog(log, "    ! нет пакета pdfplumber (pip install pdfplumber) — PDF пропущены")
+                    else:
+                        convert_folder(pdf_dir, pdf_dir / PDF_OUT, log=lambda text: writelog(log, text))
+                    writelog(log, line)
+
                 writelog(log, "RUNNING PARSER")
                 writelog(log, line)
 
@@ -503,6 +520,28 @@ class Command(BaseCommand):
                         "ВНИМАНИЕ: у счетов не указан банк (Казначейство → Банковские счета): "
                         + ", ".join(no_bank),
                     )
+
+                # ==================================================
+                # Справочник контрагентов: новые ИНН → DaData (cp_cp).
+                # Имена из справочника видны только в витринах ДДС.
+                # ==================================================
+
+                writelog(log, "Контрагенты: новые ИНН → DaData ....")
+                if params.get("cp_sync", True):
+                    from cp.admin.services.sync import sync_new
+
+                    from ...models.jobs import ScopeOfWorks
+                    from .firstrun import JOBS
+
+                    spec = next(dict(j) for j in JOBS if j["command"] == "cp_sync")
+                    Jobs.objects.get_or_create(command=spec.pop("command"),
+                                               defaults={**spec, "scope": ScopeOfWorks.LOCAL})
+                    try:
+                        sync_new(log=lambda text: writelog(log, text))
+                    except Exception as cp_exc:
+                        writelog(log, f"     ВНИМАНИЕ: справочник не обновлён ({cp_exc})")
+                else:
+                    writelog(log, "     пропущено (cp_sync: false)")
 
                 # ==================================================
                 # Резолверы: новые КБК и счета + переразноска по правилам

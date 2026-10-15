@@ -74,13 +74,14 @@ class CpAdmin(AppModelAdmin):
     ordering = ["name"]
 
     search_fields = [
+        "title",
         "name",
         "inn",
         "ogrn",
         "manager_name",
     ]
 
-    search_help_text = "Наименование, ИНН, ОГРН или руководитель"
+    search_help_text = "Название, ИНН, ОГРН или руководитель"
 
     list_filter = [
         CpNameFilter,
@@ -107,6 +108,7 @@ class CpAdmin(AppModelAdmin):
             "Контрагент",
             {
                 "fields": (
+                    "title",
                     ("name", "avatar"),
                     ("inn", "ogrn"),
                     ("status", "registration_date"),
@@ -143,6 +145,13 @@ class CpAdmin(AppModelAdmin):
         "updated_at",
     ]
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if "title" in form.changed_data:                # новое название — сразу в «Контрагентах и статьях»
+            from dashboard.services.marts import schedule_cp_audit
+
+            schedule_cp_audit()
+
     def get_readonly_fields(self, request, obj=None):
         fields = list(super().get_readonly_fields(request, obj))
 
@@ -166,11 +175,14 @@ class CpAdmin(AppModelAdmin):
 
         subtext = f"ИНН {obj.inn}"
 
+        if obj.title and obj.name and obj.title != obj.name:
+            subtext = f"{obj.name} · {subtext}"
+
         if obj.ogrn:
             subtext = f"{subtext} · ОГРН {obj.ogrn}"
 
         return FirstCol(
-            obj.name or obj.inn,
+            obj.title or obj.name or obj.inn,
             subtext,
             avatar_url,
         ).avatar_name_subtext
@@ -266,7 +278,7 @@ class CpAdmin(AppModelAdmin):
 
     actions_row = ["update_dadata_row"]
     actions_detail = ["update_dadata_detail"]
-    actions = ["update_dadata_bulk"]
+    actions = ["print_list", "export_xlsx", "update_dadata_bulk"]
 
     def _update_one(self, request: HttpRequest, cp: CP) -> None:
         """Обновление одной записи + сообщение пользователю."""
@@ -344,6 +356,60 @@ class CpAdmin(AppModelAdmin):
         object_id=None,
     ) -> bool:
         return request.user.has_perm("cp.change_cp")
+
+    # ------------------------------------------------------------------
+    # Печать и Excel выбранных
+    # ------------------------------------------------------------------
+
+    @admin.action(description="Распечатать список (PDF)")
+    def print_list(self, request: HttpRequest, queryset):
+        from django.conf import settings
+        from django.shortcuts import render
+
+        rows = list(queryset.order_by("title", "name"))
+        return render(request, "cp/print_list.html", {
+            "rows": rows,
+            "site_title": getattr(settings, "UNFOLD", {}).get("SITE_TITLE", ""),
+            "kicker": "Справочник",
+            "doc_title": "Контрагенты",
+            "doc_sub": f"{len(rows)} шт.",
+            "now": timezone.localtime(),
+        })
+
+    @admin.action(description="Скачать Excel")
+    def export_xlsx(self, request: HttpRequest, queryset):
+        from core.reports.http import xlsx_response
+        from core.reports.xlsx import Book, Col, Row
+
+        rows = list(queryset.prefetch_related("groups").order_by("title", "name"))
+        book = Book("Контрагенты", subtitle="Справочник контрагентов",
+                    params=f"{timezone.localtime():%d.%m.%Y} · {len(rows)} шт.")
+        book.sheet("Контрагенты", "Контрагенты",
+                   description="Название для отчётов, реквизиты и данные DaData").table(
+            [
+                Col("Название для отчётов", width=40),
+                Col("Наименование", width=50),
+                Col("ИНН", kind="code", width=14),
+                Col("ОГРН", kind="code", width=17),
+                Col("Статус", width=15),
+                Col("Дата регистрации", width=14),
+                Col("Руководитель", width=34),
+                Col("Регион", width=22),
+                Col("Страна", width=14),
+                Col("Адрес", width=60, wrap=True),
+                Col("Группы", width=24),
+            ],
+            [
+                Row([cp.title or "", cp.name or "", cp.inn, cp.ogrn or "", cp.get_status_display(),
+                     cp.registration_date.strftime("%d.%m.%Y") if cp.registration_date else "",
+                     cp.manager_name or "", cp.region or "", cp.country or "", cp.address or "",
+                     ", ".join(str(g) for g in cp.groups.all())])
+                for cp in rows
+            ],
+            freeze_cols=1,
+            autofilter=True,
+        )
+        return xlsx_response(book, "Контрагенты")
 
     @admin.action(description="Обновить данные из DaData")
     def update_dadata_bulk(self, request: HttpRequest, queryset):

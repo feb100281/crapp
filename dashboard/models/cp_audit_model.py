@@ -17,6 +17,8 @@ class CpAudit(models.Model):
 
     inn = models.CharField(max_length=20, null=True, verbose_name="ИНН")
     cp_name = models.TextField(null=True, verbose_name="Контрагент")
+    cp_title = models.TextField(null=True, verbose_name="Контрагент для отчётов")
+    by_name = models.BooleanField(default=False, verbose_name="Группировать по названию")
     kbk = models.CharField(max_length=20, null=True, verbose_name="КБК")
     ba_key = models.CharField(max_length=5, null=True, verbose_name="Счёт контрагента, 5 цифр")
     ba_number = models.CharField(max_length=32, null=True, verbose_name="Наш счёт")

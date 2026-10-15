@@ -1,0 +1,28 @@
+{% extends "dashboard/print_base.html" %}
+
+{% block body %}
+    <table>
+        <thead>
+            <tr>
+                <th class="num">№</th>
+                <th>Контрагент</th>
+                <th>ИНН / ОГРН</th>
+                <th>Статус</th>
+                <th>Регион</th>
+                <th>Руководитель</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cp in rows %}
+                <tr>
+                    <td class="num">{{ forloop.counter }}</td>
+                    <td><b>{{ cp.title|default:cp.name|default:"—" }}</b>{% if cp.name and cp.name != cp.title %}<div class="note">{{ cp.name }}</div>{% endif %}</td>
+                    <td class="acc">{{ cp.inn }}{% if cp.ogrn %}<div class="note">{{ cp.ogrn }}</div>{% endif %}</td>
+                    <td>{{ cp.get_status_display }}{% if cp.registration_date %}<div class="note">с {{ cp.registration_date|date:"d.m.Y" }}</div>{% endif %}</td>
+                    <td>{{ cp.region|default:"" }}{% if cp.country and cp.country != "Россия" %}<div class="note">{{ cp.country }}</div>{% endif %}</td>
+                    <td>{{ cp.manager_name|default:"" }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

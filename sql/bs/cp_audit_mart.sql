@@ -21,6 +21,16 @@ SELECT
     l.direction                                       AS direction,
     l.inn_adjust                                      AS inn,
     l.cp_name                                         AS cp_name,
+    -- по названию: нет ИНН или счёт физлица с ИНН банка
+    CASE WHEN COALESCE(l.inn_adjust, '') = '' OR ((substr(COALESCE(l.cp_ba, ''), 1, 5) IN ('40817', '40820') OR substr(COALESCE(l.cp_ba, ''), 1, 3) = '423') AND length(l.inn_adjust) = 10)
+         THEN 1 ELSE 0 END                            AS by_name,
+    -- как показываем: «Название для отчётов» из справочника, иначе очищенное из выписки
+    CASE WHEN COALESCE(l.inn_adjust, '') = '' OR ((substr(COALESCE(l.cp_ba, ''), 1, 5) IN ('40817', '40820') OR substr(COALESCE(l.cp_ba, ''), 1, 3) = '423') AND length(l.inn_adjust) = 10)
+         THEN COALESCE(t.title, l.cp_name)
+         WHEN NULLIF(trim(cp.title), '') IS NOT NULL THEN cp.title
+         WHEN NULLIF(trim(cp.name), '') IS NULL OR cp.updated_at IS NULL
+         THEN COALESCE(t.title, l.cp_name)
+         ELSE cp.name END                             AS cp_title,
     l.kbk                                             AS kbk,
     l.ba_resolver                                     AS ba_key,
     b.number                                          AS ba_number,
@@ -51,6 +61,8 @@ LEFT JOIN treasury_resolver     rb ON l.kbk IS NULL AND rb.kind = 'BA'
 LEFT JOIN treasury_resolver     rc ON rc.kind = 'CP' AND rc.match_name IS NULL
                                    AND rc.key = l.inn_adjust AND rc.direction = l.direction
 LEFT JOIN treasury_bankaccount  b  ON b.id = l.ba_account_id
+LEFT JOIN cp_cp                 cp ON cp.inn = l.inn_adjust
+LEFT JOIN cp_name_title         t  ON t.raw = l.cp_name
 WHERE l.intercompany = 0;
 
 CREATE INDEX dashboard_cp_audit_cp ON dashboard_cp_audit (inn, direction);

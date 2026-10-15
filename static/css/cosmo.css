@@ -299,3 +299,47 @@ a[href*="export-xlsx"]::before, a[href*="export-rules"]::before {
     .pk-hero::after { left: 16px; right: 16px; }
     .pk-dash .pk-hero-title { font-size: 22px; }
 }
+
+/* Модалка операций: контрагент и поиск */
+.pk-ops-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0 10px; }
+.pk-ops-field {
+    position: relative; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; min-width: 0;
+    border: 1px solid var(--color-pk-line); border-radius: var(--cx-r); background: #fff; cursor: text;
+    transition: border-color .15s, box-shadow .15s;
+}
+.pk-ops-field:hover { border-color: var(--color-pk-sky); }
+.pk-ops-field:focus-within { border-color: var(--color-pk-blue); box-shadow: 0 0 0 3px rgba(16, 46, 160, .10); }
+.pk-ops-field.pk-ops-on { border-color: var(--color-pk-blue); background: var(--color-pk-pale-soft); }
+.pk-ops-field > .material-symbols-outlined { font-size: 19px; color: var(--color-pk-muted); flex: none; }
+.pk-ops-field.pk-ops-on > .material-symbols-outlined { color: var(--color-pk-blue); }
+.pk-ops-field select, .pk-ops-field input {
+    flex: 1; min-width: 0; height: 100%; padding: 0; margin: 0;
+    border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent !important;
+    font: inherit; font-size: 13px; color: var(--color-pk-ink);
+    -webkit-appearance: none; appearance: none;
+}
+.pk-ops-field input::placeholder { color: #9AA1B2; }
+.pk-ops-field select { cursor: pointer; padding-right: 22px; text-overflow: ellipsis; }
+.pk-ops-field .pk-ops-caret { position: absolute; right: 10px; pointer-events: none; font-size: 18px; }
+.pk-ops-field-cp { flex: 0 1 380px; cursor: pointer; }
+.pk-ops-field-q { flex: 1 1 320px; }
+.pk-ops-reset {
+    display: inline-flex; align-items: center; gap: 4px; height: 38px; padding: 0 6px;
+    font-size: 12.5px; font-weight: 600; color: var(--color-pk-muted) !important; white-space: nowrap;
+}
+.pk-ops-reset .material-symbols-outlined { font-size: 17px; }
+.pk-ops-reset:hover { color: var(--color-pk-blue) !important; }
+.dark .pk-ops-field { background: var(--color-base-900); border-color: var(--color-base-700); }
+.dark .pk-ops-field.pk-ops-on { background: rgba(129, 147, 217, .08); border-color: var(--color-pk-sky); }
+.dark .pk-ops-field select, .dark .pk-ops-field input { color: var(--color-base-200); }
+@media (max-width: 640px) { .pk-ops-field-cp, .pk-ops-field-q { flex: 1 1 100%; } }
+
+/* Контрагенты и статьи: длинное название в две строки, ссылка «переименовать» */
+.pk-audit-title {
+    white-space: normal !important; overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; max-width: 520px;
+}
+.pk-audit-edit { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: var(--color-pk-muted) !important; opacity: 0; transition: opacity .15s; }
+.pk-audit-edit .material-symbols-outlined { font-size: 14px; }
+.pk-audit-row:hover .pk-audit-edit { opacity: 1; }
+.pk-audit-edit:hover { color: var(--color-pk-blue); }

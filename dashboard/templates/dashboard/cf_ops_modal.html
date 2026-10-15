@@ -15,6 +15,30 @@
         </div>
     </div>
 
+    <form class="pk-ops-filter" hx-get="{{ form_url }}" hx-target="#pk-ops-body"
+          hx-trigger="submit, change from:find select, input changed delay:600ms from:find input[name=q]">
+        {% for k, v in form_params %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+        <label class="pk-ops-field pk-ops-field-cp{% if cp_key %} pk-ops-on{% endif %}">
+            <span class="material-symbols-outlined">groups</span>
+            <select name="cpk" title="Контрагент">
+                <option value="">Все контрагенты · {{ cp_total|unlocalize }}</option>
+                {% for key, label, sel in cp_options %}<option value="{{ key }}"{% if sel %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <span class="material-symbols-outlined pk-ops-caret">expand_more</span>
+        </label>
+        <label class="pk-ops-field pk-ops-field-q{% if q %} pk-ops-on{% endif %}">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" name="q" value="{{ q }}" placeholder="Поиск: контрагент, ИНН, назначение платежа"
+                   autocomplete="off" spellcheck="false"{% if q %} autofocus onfocus="this.setSelectionRange(this.value.length, this.value.length)"{% endif %}>
+        </label>
+        {% if q or cp_key %}
+            <a href="#" class="pk-ops-reset" title="Сбросить контрагента и поиск"
+               hx-get="{{ form_url }}?{% for k, v in form_params %}{% if k != 'v' %}{{ k|urlencode }}={{ v|urlencode }}&{% endif %}{% endfor %}"
+               hx-target="#pk-ops-body"><span class="material-symbols-outlined">close</span>Сбросить</a>
+        {% endif %}
+    </form>
+    {% if cp_more %}<div class="pk-mini-note">В списке {{ cp_options|length }} крупнейших контрагентов из {{ cp_total }} — остальных найдите поиском.</div>{% endif %}
+
     <div class="pk-kpi-grid">
         {% for k in kpis %}
             <div class="pk-kpi-card">

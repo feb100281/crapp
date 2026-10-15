@@ -105,14 +105,21 @@ class CpAuditAdmin(DashboardAdmin):
         page = Paginator(rows, PAGE).get_page(request.GET.get("p"))
 
         def ops_url(row, cf):
-            query = {"mode": row.mode, "inn": row.inn, "name": row.name, "dir": row.direction, "cf": cf}
+            query = {"mode": row.mode, "inn": row.inn, "name": row.key if row.mode == "name" else row.title,
+                     "dir": row.direction, "cf": cf}
             query.update({k: v for k, v in (("y", p["year"]), ("ba", p["ba"])) if v})
             return reverse("admin:dashboard_cpaudit_ops") + "?" + urlencode(query)
 
         def label(row, kind, pk):
             return row.places.get((kind, pk)) or cp_audit.KIND_LABELS.get(kind, kind)
 
+        from cp.models import CP
+
+        cp_ids = dict(CP.objects.filter(inn__in={r.inn for r in page if r.mode == "inn"})
+                      .values_list("inn", "id"))
         for row in page:
+            row.edit_url = (reverse("admin:cp_cp_change", args=[cp_ids[row.inn]])
+                            if row.mode == "inn" and row.inn in cp_ids else "")
             row.badge = Badge(DIRECTIONS[row.direction], *DIRECTION_BADGES[row.direction]).badge
             row.amount_text = money(row.total_amount)
             row.open_text = money(row.open_amount)
@@ -216,12 +223,12 @@ class CpAuditAdmin(DashboardAdmin):
             flag = "похоже на ошибку" if row.suspect else ("несколько статей" if row.multi else "")
             pinned = "да" if row.pinned else ""
             for use in row.item_list:
-                yield [row.name, row.inn, direction, use.article_code or use.code,
+                yield [row.title, row.inn, direction, use.article_code or use.code,
                        use.article_name or use.name, use.code, use.name, use.count, use.amount,
                        round(100 * use.share, 1), use.first, use.last, use.manual,
                        "редкая" if use.rare else "", flag, pinned]
             if row.open_count:
-                yield [row.name, row.inn, direction, "", "", "", "Не разнесено", row.open_count,
+                yield [row.title, row.inn, direction, "", "", "", "Не разнесено", row.open_count,
                        row.open_amount, None, None, None, 0, "", flag, pinned]
 
     def _csv(self, rows):
@@ -258,7 +265,7 @@ class CpAuditAdmin(DashboardAdmin):
         table = []
         for row in rows:
             table.append(Row([
-                row.name, row.inn, DIRECTIONS[row.direction], "", "",
+                row.title, row.inn, DIRECTIONS[row.direction], "", "",
                 row.total_count, row.total_amount, None, None, None,
                 "закреплён" if row.pinned else "",
             ], level="warn" if row.suspect else 3, collapsed=True))

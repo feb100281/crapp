@@ -11,7 +11,11 @@ from django.db.models.functions import Coalesce
 from django.forms.models import BaseInlineFormSet
 
 from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateFilter
-from unfold.decorators import display
+from django.contrib import messages
+from django.db import transaction
+from django.shortcuts import redirect
+from django.urls import reverse
+from unfold.decorators import action, display
 
 from core.admins.badges import Badge, ChoiceBadge
 from core.admins.base_admin import AppModelAdmin, AppTabularInline
@@ -84,6 +88,10 @@ class JournalEntryAdmin(AppModelAdmin):
 
     inlines = [JournalLineInline]
 
+    actions = ["copy_selected"]
+    actions_row = ["copy_row"]
+    actions_detail = ["copy_detail"]
+
     fieldsets = (
         (None, {"fields": (("date", "kind"), "description", "note")}),
     )
@@ -107,6 +115,46 @@ class JournalEntryAdmin(AppModelAdmin):
                 cr=diff if diff > 0 else 0,
                 note="Добавлено автоматически",
             )
+
+    # ------------------------------------------------------------------
+    # Копирование проводки со всеми строками
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _copy(entry: JournalEntry) -> JournalEntry:
+        with transaction.atomic():
+            lines = list(entry.lines.all())
+            new = JournalEntry.objects.create(
+                date=entry.date, kind=entry.kind,
+                description=f"Копия: {entry.description}"[:500], note=entry.note,
+            )
+            for line in lines:
+                line.pk = None
+                line.entry = new
+            JournalLine.objects.bulk_create(lines)
+        return new
+
+    def _open_copy(self, request, object_id):
+        entry = JournalEntry.objects.filter(pk=object_id).first()
+        if entry is None:
+            messages.error(request, "Проводка не найдена")
+            return redirect(reverse("admin:gl_journalentry_changelist"))
+        new = self._copy(entry)
+        messages.success(request, "Копия создана — поправьте дату, суммы и сохраните.")
+        return redirect(reverse("admin:gl_journalentry_change", args=[new.pk]))
+
+    @action(description="Копировать", icon="content_copy")
+    def copy_row(self, request, object_id):
+        return self._open_copy(request, object_id)
+
+    @action(description="Копировать", icon="content_copy")
+    def copy_detail(self, request, object_id):
+        return self._open_copy(request, object_id)
+
+    @admin.action(description="Копировать выбранные")
+    def copy_selected(self, request, queryset):
+        made = [self._copy(entry) for entry in queryset.order_by("date", "pk")]
+        messages.success(request, f"Создано копий: {len(made)}. В названии — «Копия: …».")
 
     def get_queryset(self, request):
         return (

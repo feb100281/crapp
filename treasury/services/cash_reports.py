@@ -38,6 +38,9 @@ def build(log=print) -> dict:
         log("     ПРОПУЩЕНО: нет ни одного файла курсов в data/parquet/fx")
         return {"skipped": True}
 
+    from cp.admin.services.titles import refresh_titles
+
+    log(f"     названия контрагентов для отчётов: {refresh_titles(full=True)}")
     sql = SQLHelpers()
     with duckdb.connect() as con:
         con.execute(f"ATTACH '{settings.SQLITE_CON}' AS target_db (TYPE SQLITE);")
