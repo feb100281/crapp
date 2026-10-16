@@ -32,8 +32,12 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 CSRF_TRUSTED_ORIGINS = [
-    "http://37.46.129.233:8085",
+    "http://37.46.129.233:8045",
 ]
+
+# свои имена кук: на том же IP живут другие Django-проекты, куки не различают порт
+CSRF_COOKIE_NAME = "cr_csrftoken"
+SESSION_COOKIE_NAME = "cr_sessionid"
 
 
 
