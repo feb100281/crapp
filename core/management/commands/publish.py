@@ -167,7 +167,7 @@ class Command(BaseCommand):
 
     def step_upload(self, zst):
         self.log("4. Отправка на сервер")
-        self.ssh(f"mkdir -p {self.app_dir}/.tmp/publish {self.app_dir}/media")
+        self.ssh(f"mkdir -p {self.app_dir}/.tmp/publish {self.app_dir}/media/jobs/logs")
         self.rsync(zst, f"{self.remote}:{self.app_dir}/.tmp/publish/{SNAP_NAME}")
         self.log("   media/ (без логов задач)")
         media = Path(settings.MEDIA_ROOT)
@@ -176,7 +176,7 @@ class Command(BaseCommand):
                        extra=["-z", "--exclude=jobs/logs/"])
 
     def step_remote(self, keep_apps):
-        self.log("5. Сервер: pull → pip → база → migrate → static → restart")
+        self.log("5. Сервер: pull → pip → база → migrate → static → restart (сайт + бот)")
         keep = ",".join(keep_apps)
         script = f"""
 set -e
@@ -187,6 +187,7 @@ git pull --ff-only
 .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput -v 0
 sudo -n systemctl restart crapp
+if [ -f /etc/systemd/system/crapp-bot.service ]; then sudo -n systemctl restart crapp-bot; fi
 sleep 2
 systemctl is-active crapp
 """

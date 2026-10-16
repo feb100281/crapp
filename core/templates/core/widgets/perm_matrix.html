@@ -1,0 +1,115 @@
+<div class="pm" data-pm>
+  <div class="pm-top">
+    <span class="pm-quick">Быстро:</span>
+    <button type="button" class="pm-chip" data-pm-preset="view">только просмотр всего</button>
+    <button type="button" class="pm-chip" data-pm-preset="all">полный доступ</button>
+    <button type="button" class="pm-chip" data-pm-preset="none">снять всё</button>
+    <input type="search" class="pm-search" placeholder="Найти раздел…" data-pm-search>
+    <span class="pm-count" data-pm-count></span>
+  </div>
+
+  <table class="pm-table">
+    <thead>
+      <tr>
+        <th class="pm-h-name">Раздел</th>
+        {% for code, label in widget.matrix.actions %}
+          <th class="pm-h-act">
+            <label><input type="checkbox" class="pm-cb" data-pm-col="{{ code }}"> {{ label }}</label>
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+
+    {% for sec in widget.matrix.groups %}
+      <tbody data-pm-sec>
+        <tr class="pm-sec">
+          <td colspan="5"><button type="button" class="pm-sec-btn" data-pm-sec-toggle title="Отметить / снять весь раздел">{{ sec.label }}</button></td>
+        </tr>
+        {% for m in sec.models %}
+          <tr class="pm-row" data-pm-row data-pm-text="{{ sec.label|lower }} {{ m.label|lower }}">
+            <td class="pm-name">
+              <button type="button" class="pm-row-btn" data-pm-row-toggle title="Отметить / снять всю строку">{{ m.label }}</button>
+              {% if m.extra %}
+                <div class="pm-extra">
+                  {% for p in m.extra %}
+                    <label class="pm-xchip"><input type="checkbox" class="pm-cb" name="{{ widget.name }}" value="{{ p.pk }}"{% if p.checked %} checked{% endif %}> {{ p.label }}</label>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </td>
+            {% for c in m.cells %}
+              <td class="pm-cell">
+                {% if c %}<input type="checkbox" class="pm-cb" name="{{ widget.name }}" value="{{ c.pk }}" data-pm-act="{{ c.act }}" title="{{ c.label }}"{% if c.checked %} checked{% endif %}>{% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% empty %}
+      <tbody><tr><td colspan="5" class="pm-empty">Нет доступных прав</td></tr></tbody>
+    {% endfor %}
+  </table>
+</div>
+<script>
+(function () {
+  const root = document.currentScript.previousElementSibling;
+  if (!root || !root.matches("[data-pm]")) return;
+
+  const boxes = () => [...root.querySelectorAll('input[type=checkbox][name]')];
+  const visible = (el) => !el.closest("tr").hidden;
+  const fire = (cb) => cb.dispatchEvent(new Event("change", { bubbles: true }));
+
+  function setAll(list, state) { list.forEach((cb) => { if (cb.checked !== state) { cb.checked = state; fire(cb); } }); }
+  function toggle(list) { setAll(list, !list.every((cb) => cb.checked)); }
+
+  function refresh() {
+    const all = boxes();
+    root.querySelector("[data-pm-count]").textContent = `выбрано ${all.filter((c) => c.checked).length} из ${all.length}`;
+    root.querySelectorAll("[data-pm-col]").forEach((head) => {
+      const col = all.filter((c) => c.dataset.pmAct === head.dataset.pmCol && visible(c));
+      const on = col.filter((c) => c.checked).length;
+      head.checked = col.length > 0 && on === col.length;
+      head.indeterminate = on > 0 && on < col.length;
+    });
+  }
+
+  root.addEventListener("change", (e) => {
+    const head = e.target.closest("[data-pm-col]");
+    if (head) {
+      setAll(boxes().filter((c) => c.dataset.pmAct === head.dataset.pmCol && visible(c)), head.checked);
+    }
+    refresh();
+  });
+
+  root.addEventListener("click", (e) => {
+    const preset = e.target.closest("[data-pm-preset]");
+    if (preset) {
+      const p = preset.dataset.pmPreset;
+      boxes().forEach((cb) => {
+        const want = p === "all" ? true : p === "view" ? cb.dataset.pmAct === "view" : false;
+        if (cb.checked !== want) { cb.checked = want; fire(cb); }
+      });
+    }
+    const row = e.target.closest("[data-pm-row-toggle]");
+    if (row) toggle([...row.closest("tr").querySelectorAll("input[name]")]);
+    const sec = e.target.closest("[data-pm-sec-toggle]");
+    if (sec) toggle([...sec.closest("tbody").querySelectorAll("tr.pm-row:not([hidden]) input[name]")]);
+    refresh();
+  });
+
+  root.querySelector("[data-pm-search]").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    root.querySelectorAll("tbody[data-pm-sec]").forEach((tb) => {
+      let any = false;
+      tb.querySelectorAll("[data-pm-row]").forEach((tr) => {
+        tr.hidden = q && !tr.dataset.pmText.includes(q);
+        any = any || !tr.hidden;
+      });
+      tb.hidden = !any;
+    });
+    refresh();
+  });
+
+  refresh();
+})();
+</script>
