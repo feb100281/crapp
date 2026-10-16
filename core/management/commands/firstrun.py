@@ -93,6 +93,19 @@ ACCOUNTS = [
 # У существующей команды param НЕ перезаписывается.
 JOBS = [
     {
+        "command": "publish",
+        "name": "Опубликовать на сервер",
+        "jobtype": JobTypes.PUBLISH,
+        "description": (
+            "<h2><u>Публикация на сервер</u></h2>"
+            "<p>pip freeze → git commit/push → снимок базы (zstd) → rsync базы и media → "
+            "на сервере: git pull, pip, подмена базы, migrate, collectstatic, рестарт crapp.</p>"
+            "<p>Пользователи, группы, сессии на сервере не трогаются никогда.</p>"
+            "<pre>Параметры:\napps: приложения, данные которых живут на сервере (не перезаписываются)</pre>"
+        ),
+        "param": {"apps": ["tgbot"]},
+    },
+    {
         "command": "bs",
         "name": "Выписки",
         "jobtype": JobTypes.DATA,

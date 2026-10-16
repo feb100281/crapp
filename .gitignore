@@ -37,6 +37,8 @@ Thumbs.db
 # Django
 # ========================================
 db.sqlite3
+*.sqlite3
+backups/
 db.sqlite3-*
 media/
 staticfiles/
