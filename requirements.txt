@@ -21,6 +21,7 @@ dpd_components==0.2.0
 duckdb==1.5.5
 et_xmlfile==2.0.0
 Flask==3.1.3
+greenlet==3.5.6
 gunicorn==26.0.0
 idna==3.18
 importlib_metadata==9.0.0
@@ -36,7 +37,10 @@ openpyxl==3.1.5
 packaging==26.3
 pandas==3.0.5
 paramiko==5.0.0
+pdfminer.six==20260107
+pdfplumber==0.11.10
 pillow==12.3.0
+playwright==1.56.0
 plotly==6.9.0
 polars==1.44.2
 polars-runtime-32==1.44.2
@@ -45,7 +49,10 @@ pyarrow==25.0.1
 pycparser==3.11
 pydantic==2.13.4
 pydantic_core==2.46.4
+pyee==13.0.1
 PyNaCl==1.6.2
+pypdfium2==5.14.0
+PySocks==1.7.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 questionary==2.1.1
