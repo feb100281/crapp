@@ -18,6 +18,7 @@ from django.db.models import Q, Sum
 from django.db.models.functions import Abs
 from django.urls import reverse
 
+from config.perms import can_view
 from dashboard.admin.common import money
 
 
@@ -156,16 +157,69 @@ def _visitors() -> list[dict]:
     return out[:6]
 
 
-def dashboard_callback(request, context):
-    try:
-        cards = _cards()
-    except DatabaseError:  # витрины ещё не построены
-        cards = {}
+# (иконка, название, описание, url-имя, модель для прав)
+SECTIONS = [
+    ("receipt", "Банковские выписки", "Загруженные выписки по счетам",
+     "admin:treasury_statement_changelist", "treasury.statement"),
+    ("list_alt", "Операции", "Строки выписок и их разноска",
+     "admin:treasury_bsline_changelist", "treasury.bsline"),
+    ("account_balance", "Банковские счета", "Счета, банки, валюты, даты закрытия",
+     "admin:treasury_bankaccount_changelist", "treasury.bankaccount"),
+    ("groups", "Контрагенты", "Справочник: названия, ИНН, группы",
+     "admin:cp_cp_changelist", "cp.cp"),
+    ("manage_search", "Контрагенты и статьи", "Кто разнесён на несколько статей",
+     "admin:dashboard_cpaudit_changelist", "dashboard.cpaudit"),
+    ("person_pin", "Резолверы контрагентов", "Статья по контрагенту — раньше правил КБК и счёта",
+     "admin:treasury_cpresolver_changelist", "treasury.cpresolver"),
+    ("rule", "Резолверы КБК", "Налоги и платежи в бюджет",
+     "admin:treasury_kbkresolver_changelist", "treasury.kbkresolver"),
+    ("pin", "Резолверы счетов", "Правила по счетам контрагентов",
+     "admin:treasury_baresolver_changelist", "treasury.baresolver"),
+    ("sync_alt", "Между своими", "Переводы, конвертации, депозиты",
+     "admin:treasury_icresolver_changelist", "treasury.icresolver"),
+    ("account_tree", "Статьи ДДС", "Справочник статей и подстатей",
+     "admin:treasury_cfitem_tree", "treasury.cfitem"),
+    ("menu_book", "Главная книга", "План счетов и журнал проводок",
+     "admin:gl_journalentry_changelist", "gl.journalentry"),
+    ("candlestick_chart", "Курсы валют", "Курсы ЦБ по дням",
+     "admin:macro_fx_changelist", "macro.fx"),
+    ("wand_shine", "Команды", "Импорт выписок, курсы ЦБ, пересчёт ДДС",
+     "admin:core_jobs_changelist", "core.jobs"),
+]
 
-    try:
-        updates, visitors = _updates(), _visitors()
-    except DatabaseError:
-        updates, visitors = [], []
+LINKS = {
+    "cash_flow": ("admin:dashboard_cashflow_changelist", "dashboard.cashflow"),
+    "balance": ("admin:dashboard_cashbalanceday_changelist", "dashboard.cashbalanceday"),
+    "check": ("admin:dashboard_cashcheck_changelist", "dashboard.cashcheck"),
+    "cp_audit": ("admin:dashboard_cpaudit_changelist", "dashboard.cpaudit"),
+    "items": ("admin:treasury_cfitem_tree", "treasury.cfitem"),
+    "lines": ("admin:treasury_bsline_changelist", "treasury.bsline"),
+    "jobs": ("admin:core_jobs_changelist", "core.jobs"),
+}
+
+
+def dashboard_callback(request, context):
+    user = request.user
+    # нет прав на раздел — ссылки нет, плитка и карточка не показываются
+    links = {key: reverse(url) if can_view(user, model) else None for key, (url, model) in LINKS.items()}
+    sections = [(icon, title, sub, reverse(url)) for icon, title, sub, url, model in SECTIONS
+                if can_view(user, model)]
+    kpi_count = sum(bool(links[k]) for k in ("balance", "cash_flow", "lines", "check"))
+
+    cards = {}
+    if kpi_count or links["balance"]:
+        try:
+            cards = _cards()
+        except DatabaseError:  # витрины ещё не построены
+            cards = {}
+
+    # события и визиты — только администратору
+    updates, visitors = [], []
+    if user.is_superuser:
+        try:
+            updates, visitors = _updates(), _visitors()
+        except DatabaseError:
+            pass
 
     context.update({
         "cards": cards,
@@ -173,15 +227,9 @@ def dashboard_callback(request, context):
         "visitors": visitors,
         "now": timezone.localtime(),
         "title": "Главная",
-        "links": {
-            "cash_flow": reverse("admin:dashboard_cashflow_changelist"),
-            "balance": reverse("admin:dashboard_cashbalanceday_changelist"),
-            "check": reverse("admin:dashboard_cashcheck_changelist"),
-            "cp_audit": reverse("admin:dashboard_cpaudit_changelist"),
-            "items": reverse("admin:treasury_cfitem_tree"),
-            "lines": reverse("admin:treasury_bsline_changelist"),
-            "jobs": reverse("admin:core_jobs_changelist"),
-        },
+        "links": links,
+        "kpi_count": kpi_count,
+        "show_activity": user.is_superuser,
         # в разработке: (иконка, название, описание, метка)
         "roadmap": [
             ("point_of_sale", "Реализация", "Продажи по салонам, интернет-магазину и маркетплейсам: выручка, маржа, "
@@ -201,27 +249,6 @@ def dashboard_callback(request, context):
             ("send", "Telegram-бот", "остатки, движение за день, ДДС и курсы — в телефоне"),
             ("download", "Excel и PDF", "кнопки в шапке каждого отчёта; печать — для бухгалтера"),
         ],
-        "sections": [
-            ("receipt", "Банковские выписки", "Загруженные выписки по счетам",
-             reverse("admin:treasury_statement_changelist")),
-            ("list_alt", "Операции", "Строки выписок и их разноска",
-             reverse("admin:treasury_bsline_changelist")),
-            ("person_pin", "Резолверы контрагентов", "Статья по контрагенту — раньше правил КБК и счёта",
-             reverse("admin:treasury_cpresolver_changelist")),
-            ("manage_search", "Контрагенты и статьи", "Кто разнесён на несколько статей",
-             reverse("admin:dashboard_cpaudit_changelist")),
-            ("rule", "Резолверы КБК", "Налоги и платежи в бюджет",
-             reverse("admin:treasury_kbkresolver_changelist")),
-            ("pin", "Резолверы счетов", "Правила по счетам контрагентов",
-             reverse("admin:treasury_baresolver_changelist")),
-            ("sync_alt", "Между своими", "Переводы, конвертации, депозиты",
-             reverse("admin:treasury_icresolver_changelist")),
-            ("account_tree", "Статьи ДДС", "Справочник статей и подстатей",
-             reverse("admin:treasury_cfitem_tree")),
-            ("menu_book", "Главная книга", "План счетов и журнал проводок",
-             reverse("admin:gl_glaccount_changelist")),
-            ("wand_shine", "Команды", "Импорт выписок, курсы ЦБ, пересчёт ДДС",
-             reverse("admin:core_jobs_changelist")),
-        ],
+        "sections": sections,
     })
     return context

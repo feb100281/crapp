@@ -197,7 +197,7 @@ class CashCheckAdmin(DashboardAdmin):
 
     def get_urls(self):
         return [
-            path("print/", self.admin_site.admin_view(self.print_view), name="dashboard_cashcheck_print"),
+            path("print/", self.guard(self.print_view), name="dashboard_cashcheck_print"),
             *super().get_urls(),
         ]
 

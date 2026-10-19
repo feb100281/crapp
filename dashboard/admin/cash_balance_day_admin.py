@@ -178,14 +178,14 @@ class CashBalanceDayAdmin(DashboardAdmin):
 
     def get_urls(self):
         return [
-            path("print/", self.admin_site.admin_view(self.print_view), name="dashboard_cashbalanceday_print"),
-            path("day-report/", self.admin_site.admin_view(self.day_report_view),
+            path("print/", self.guard(self.print_view), name="dashboard_cashbalanceday_print"),
+            path("day-report/", self.guard(self.day_report_view),
                  name="dashboard_cashbalanceday_dayreport"),
-            path("day/<str:date>/", self.admin_site.admin_view(self.day_view),
+            path("day/<str:date>/", self.guard(self.day_view),
                  name="dashboard_cashbalanceday_day"),
             path(
                 "ops/<int:ba_id>/<str:date>/",
-                self.admin_site.admin_view(self.ops_view),
+                self.guard(self.ops_view),
                 name="dashboard_cashbalanceday_ops",
             ),
             *super().get_urls(),

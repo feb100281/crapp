@@ -227,7 +227,7 @@ class CashFlowReportAdmin(DashboardAdmin):
 
     def get_urls(self):
         return [
-            path("ops/", self.admin_site.admin_view(self.ops_view), name="dashboard_cashflow_ops"),
+            path("ops/", self.guard(self.ops_view), name="dashboard_cashflow_ops"),
             *super().get_urls(),
         ]
 

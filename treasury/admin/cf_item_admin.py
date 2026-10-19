@@ -325,7 +325,12 @@ class CFItemAdmin(AppModelAdmin):
     # ------------------------------------------------------------------
 
     def tree_view(self, request):
+        from django.core.exceptions import PermissionDenied
+
         from ..services.exports import plain
+
+        if not self.has_view_or_change_permission(request):
+            raise PermissionDenied
 
         items = list(CFItem.objects.select_related("parent").order_by("code"))
         use = _usage(request)
@@ -428,6 +433,10 @@ class CFItemAdmin(AppModelAdmin):
         return redirect(restructure_url(object_id))
 
     def restructure_view(self, request):
+        from django.core.exceptions import PermissionDenied
+
+        if not self.has_change_permission(request):
+            raise PermissionDenied
         back = reverse("admin:treasury_cfitem_tree")
         try:
             ids = [int(x) for x in request.GET.get("ids", "").split(",") if x.strip()]

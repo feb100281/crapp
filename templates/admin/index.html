@@ -30,15 +30,17 @@
             <p class="cx-hero-sub">Выписки банков, движение денег, остатки и сверка — в одном месте.
                 Цифры обновляются при каждом импорте выписок.</p>
 
+            {% if links.cash_flow or links.balance or links.check or links.cp_audit or links.items %}
             <div class="cx-hero-actions">
-                <a href="{{ links.cash_flow }}" class="cx-btn cx-btn-light"><span class="material-symbols-outlined">table_chart</span>Отчёт ДДС</a>
-                <a href="{{ links.balance }}" class="cx-btn"><span class="material-symbols-outlined">account_balance_wallet</span>Остатки</a>
-                <a href="{{ links.check }}" class="cx-btn"><span class="material-symbols-outlined">fact_check</span>Сверка</a>
-                <a href="{{ links.cp_audit }}" class="cx-btn"><span class="material-symbols-outlined">manage_search</span>Контрагенты</a>
-                <a href="{{ links.items }}" class="cx-btn"><span class="material-symbols-outlined">account_tree</span>Статьи ДДС</a>
+                {% if links.cash_flow %}<a href="{{ links.cash_flow }}" class="cx-btn cx-btn-light"><span class="material-symbols-outlined">table_chart</span>Отчёт ДДС</a>{% endif %}
+                {% if links.balance %}<a href="{{ links.balance }}" class="cx-btn"><span class="material-symbols-outlined">account_balance_wallet</span>Остатки</a>{% endif %}
+                {% if links.check %}<a href="{{ links.check }}" class="cx-btn"><span class="material-symbols-outlined">fact_check</span>Сверка</a>{% endif %}
+                {% if links.cp_audit %}<a href="{{ links.cp_audit }}" class="cx-btn"><span class="material-symbols-outlined">manage_search</span>Контрагенты</a>{% endif %}
+                {% if links.items %}<a href="{{ links.items }}" class="cx-btn"><span class="material-symbols-outlined">account_tree</span>Статьи ДДС</a>{% endif %}
             </div>
+            {% endif %}
 
-            {% if cards.months %}
+            {% if cards.months and links.balance %}
             <div class="cx-hero-panel">
                 <div class="cx-hero-panel-head">
                     <span class="material-symbols-outlined">calendar_month</span>
@@ -61,13 +63,15 @@
     </section>
 
     {# ---------------- сводка ---------------- #}
+    {% if kpi_count %}
     <div class="cx-heading">
         <span class="material-symbols-outlined">monitoring</span>Сводка
         {% if cards %}<span class="cx-heading-note">с начала {{ cards.year|stringformat:"d" }} года · данные по выпискам на {{ cards.date|date:"d.m.Y" }}</span>{% endif %}
     </div>
 
     {% if cards %}
-    <div class="cx-kpis">
+    <div class="cx-kpis cx-kpis-{{ kpi_count }}">
+        {% if links.balance %}
         <a href="{{ links.balance }}" class="cx-kpi">
             <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">account_balance_wallet</span></span>Деньги на счетах<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
             <div class="cx-kpi-value">{{ cards.balance }} ₽</div>
@@ -76,6 +80,8 @@
             {% else %}<span class="cx-chip cx-chip-ok">выписки актуальны</span>{% endif %}
         </a>
 
+        {% endif %}
+        {% if links.cash_flow %}
         <a href="{{ links.cash_flow }}" class="cx-kpi">
             <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">swap_vert</span></span>Чистый поток<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
             <div class="cx-kpi-value{% if cards.net_neg %} cx-neg{% endif %}">{{ cards.net }} ₽</div>
@@ -83,6 +89,8 @@
             <span class="cx-chip">отчёт ДДС по месяцам и дням</span>
         </a>
 
+        {% endif %}
+        {% if links.lines %}
         <a href="{{ links.lines }}?alloc=no" class="cx-kpi">
             <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">rule</span></span>Не разнесено<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
             <div class="cx-kpi-value">{{ cards.unalloc_pct }}%</div>
@@ -91,6 +99,8 @@
             {% else %}<span class="cx-chip cx-chip-warn">нужны резолверы</span>{% endif %}
         </a>
 
+        {% endif %}
+        {% if links.check %}
         <a href="{{ links.check }}" class="cx-kpi">
             <div class="cx-kpi-top"><span class="cx-icon"><span class="material-symbols-outlined">fact_check</span></span>Сверка с банком<span class="material-symbols-outlined cx-arrow">arrow_forward</span></div>
             {% if cards.off %}
@@ -103,16 +113,21 @@
                 <span class="cx-chip cx-chip-ok">пропусков выписок нет</span>
             {% endif %}
         </a>
+        {% endif %}
     </div>
     {% else %}
     <div class="cx-panel cx-empty">
         <span class="material-symbols-outlined">hourglass_empty</span>
-        <div><b>Цифр пока нет.</b> Витрины строит команда «ДДС и переоценка» (или импорт выписок) — запустите её
-            в разделе <a href="{{ links.jobs }}">«Команды»</a>, и здесь появятся остатки, поток и сверка.</div>
+        <div><b>Цифр пока нет.</b>
+            {% if links.jobs %}Витрины строит команда «ДДС и переоценка» (или импорт выписок) — запустите её
+            в разделе <a href="{{ links.jobs }}">«Команды»</a>, и здесь появятся остатки, поток и сверка.
+            {% else %}Отчёты появятся после ближайшей загрузки выписок.{% endif %}</div>
     </div>
+    {% endif %}
     {% endif %}
 
     {# ---------------- обновления и визиты ---------------- #}
+    {% if show_activity %}
     <div class="cx-two">
         <div class="cx-panel">
             <div class="cx-panel-title"><span class="material-symbols-outlined">update</span>Последние обновления</div>
@@ -139,8 +154,10 @@
             {% endfor %}
         </div>
     </div>
+    {% endif %}
 
     {# ---------------- рабочие разделы ---------------- #}
+    {% if sections %}
     <div class="cx-heading"><span class="material-symbols-outlined">apps</span>Рабочие разделы</div>
     <div class="cx-tiles cx-tiles-5">
         {% for icon, title, sub, url in sections %}
@@ -150,6 +167,7 @@
             </a>
         {% endfor %}
     </div>
+    {% endif %}
 
     {# ---------------- в разработке ---------------- #}
     <div class="cx-heading"><span class="material-symbols-outlined">construction</span>В разработке

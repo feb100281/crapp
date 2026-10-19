@@ -117,6 +117,17 @@ class DashboardAdmin(AppModelAdmin):
     list_before_template = "dashboard/header.html"
     show_full_result_count = False
 
+    def guard(self, view):
+        """Свой URL отчёта (печать, расшифровка) — только с правом просмотра витрины."""
+        from django.core.exceptions import PermissionDenied
+
+        def inner(request, *args, **kwargs):
+            if not self.has_view_permission(request):
+                raise PermissionDenied
+            return view(request, *args, **kwargs)
+
+        return self.admin_site.admin_view(inner)
+
     def has_add_permission(self, request):
         return False
 
