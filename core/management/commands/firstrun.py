@@ -175,6 +175,19 @@ JOBS = [
         "param": {},
     },
     {
+        "command": "cash_desk",
+        "name": "Касса (карточки 50)",
+        "jobtype": JobTypes.DATA,
+        "description": (
+            "<h2><u>Касса</u></h2>"
+            "<p>Карточки счёта 50 из 1С (Excel) → data/parquet/cash/cash_desk.parquet "
+            "и cash_desk_files.parquet (итоги файлов для сверки). Подпапки допускаются, "
+            "пересекающиеся периоды не задваиваются.</p>"
+            "<pre>Параметры:\nsource: папка с выгрузками кассы</pre>"
+        ),
+        "param": {"source": ""},
+    },
+    {
         "command": "bs_sort",
         "name": "Разложить выписки по папкам",
         "jobtype": JobTypes.DATA,
