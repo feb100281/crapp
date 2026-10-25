@@ -199,6 +199,8 @@ def parse_all(bs_path: Path, statements: Path, documents: Path, log=print):
         file
         for file in bs_path.rglob("*.txt")
         if file.is_file()
+        # служебные папки раскладки (_ДУБЛИ, _НЕ РАЗОБРАНО) не загружаем
+        and not any(part.startswith("_") for part in file.relative_to(bs_path).parts[:-1])
     )
 
     log(f"Найдено TXT файлов: {len(txt_files)}")
@@ -307,6 +309,23 @@ class Command(BaseCommand):
 
                 writelog(log, f"    - Getting data from {source}")
                 writelog(log, line)
+
+                # новые файлы — по папкам банков и счетов
+                if params.get("sort", True):
+                    writelog(log, "Раскладка по папкам ....")
+                    try:
+                        from treasury.services.bs_sort import known_accounts, sort_folder
+
+                        from ...models.jobs import ScopeOfWorks
+                        from .firstrun import JOBS
+
+                        spec = next(dict(j) for j in JOBS if j["command"] == "bs_sort")
+                        Jobs.objects.get_or_create(command=spec.pop("command"),
+                                                   defaults={**spec, "scope": ScopeOfWorks.LOCAL})
+                        sort_folder(source, known_accounts(), log=lambda text: writelog(log, text))
+                    except Exception as sort_exc:              # раскладка не мешает загрузке
+                        writelog(log, f"     ВНИМАНИЕ: раскладка не выполнена ({sort_exc})")
+                    writelog(log, line)
 
                 # PDF-выписки без txt: сначала делаем из них txt в формате 1С
                 pdf_dir = source / params.get("pdf", PDF_DIR)
@@ -456,6 +475,20 @@ class Command(BaseCommand):
                         );                                           
                         """
                     )
+
+                    # файлы могли переложить по папкам — путь у загруженных выписок обновляем
+                    try:
+                        con.execute(
+                            """
+                            UPDATE target_db.treasury_statement AS s
+                            SET source_file = t.source_file
+                            FROM statements AS t
+                            WHERE s.sid = t.sid::TEXT
+                              AND s.source_file IS DISTINCT FROM t.source_file
+                            """
+                        )
+                    except Exception as upd_exc:
+                        writelog(log, f"     пути файлов не обновлены ({upd_exc})")
                     
                     # ==================================================
                     # Операции
