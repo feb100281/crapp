@@ -1,0 +1,64 @@
+{% extends "admin/base_site.html" %}
+{% load l10n %}
+
+{% block content %}
+<div class="pk-cf-page">
+    {% if empty %}
+        <div class="pk-dd-empty">Строк кассы в базе пока нет — запустите «Касса (карточки 50)» в Командах.</div>
+    {% else %}
+        <div class="pk-cf-toolbar">
+            <div class="pk-seg">
+                {% for y in years %}
+                    <a href="?y={{ y|unlocalize }}{% if problems %}&p=1{% endif %}"
+                       class="pk-seg-item{% if y == year %} pk-seg-active{% endif %}">{{ y|unlocalize }}</a>
+                {% endfor %}
+            </div>
+            <div class="pk-seg">
+                <a href="?y={{ year|unlocalize }}" class="pk-seg-item{% if not problems %} pk-seg-active{% endif %}">Все дни</a>
+                <a href="?y={{ year|unlocalize }}&p=1" class="pk-seg-item{% if problems %} pk-seg-active{% endif %}">Только расхождения</a>
+            </div>
+        </div>
+
+        {% include "dashboard/header.html" %}
+
+        <div class="pk-card pk-cf-card">
+            <div class="pk-cf-scroll">
+                <table class="pk-cf-table">
+                    <thead>
+                        <tr>
+                            <th class="pk-cf-name" style="min-width:120px">Дата</th>
+                            <th class="pk-cf-num">Сдано по 1С</th>
+                            <th style="text-align:left">В 1С указан банк</th>
+                            {% for a in accounts %}<th class="pk-cf-num">Банк: {{ a }}</th>{% endfor %}
+                            <th class="pk-cf-num">Разница дня</th>
+                            <th class="pk-cf-num">В пути</th>
+                            <th style="text-align:left">Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in rows %}
+                            <tr>
+                                <th class="pk-cf-name">{{ r.date|date:"d.m.Y, D" }}</th>
+                                <td class="pk-cf-num">{{ r.onec }}{% if r.onec_n > 1 %}<div class="pk-mini-note">{{ r.onec_n }} док.</div>{% endif %}</td>
+                                <td><span class="pk-mini-note">{{ r.hints }}</span></td>
+                                {% for v, n in r.bank %}
+                                    <td class="pk-cf-num">{{ v }}{% if n > 1 %}<div class="pk-mini-note">{{ n }} взносов</div>{% endif %}</td>
+                                {% endfor %}
+                                <td class="pk-cf-num{% if r.diff_neg %} pk-cf-neg{% endif %}">{{ r.diff }}</td>
+                                <td class="pk-cf-num{% if r.cum_neg %} pk-cf-neg{% endif %}"><b>{{ r.cum }}</b></td>
+                                <td><span class="pk-chip {{ r.css }}">{{ r.label }}</span></td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="9"><div class="pk-dd-empty">Расхождений за {{ year|unlocalize }} нет</div></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="pk-mini-note">
+            «В пути» = сдано по 1С − зачислено банком, накопленно. Плюс — 1С уже списала из кассы, банк ещё не зачислил;
+            минус — банк зачислил то, чего в кассе 1С ещё (или вообще) нет. До {{ transit_days }} дней — нормально.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

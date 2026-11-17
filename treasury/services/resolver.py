@@ -193,7 +193,7 @@ class _Matcher:
             self.rules[rid] = [(r, _RuleText(r.text_regex)) for r in rules]
 
         self.ba, self.kbk, self.cp_inn, self.cp_name = {}, {}, {}, {}
-        for r in Resolver.objects.exclude(kind=ResolverKind.IC):
+        for r in Resolver.objects.exclude(kind__in=(ResolverKind.IC, ResolverKind.CASH)):
             if r.kind == ResolverKind.BA:
                 self.ba[(r.key, r.direction)] = r.id
             elif r.kind == ResolverKind.KBK:
@@ -284,7 +284,8 @@ def _recount_rules() -> None:
         .order_by().values("resolver_rule").annotate(n=Count("id"), s=Sum("amount"))
     }
     changed = []
-    for rule in ResolverRule.objects.only("id", "hits", "hits_amount"):
+    # правила кассы считает services.cash_resolver
+    for rule in ResolverRule.objects.exclude(resolver__kind=ResolverKind.CASH).only("id", "hits", "hits_amount"):
         n, amount = fact.get(rule.id, (0, Decimal(0)))
         if rule.hits != n or rule.hits_amount != amount:
             rule.hits, rule.hits_amount = n, amount

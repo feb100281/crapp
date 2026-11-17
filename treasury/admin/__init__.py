@@ -6,3 +6,6 @@ from .ba_resolver_admin import BaResolverAdmin
 from .ic_resolver_admin import IcResolverAdmin
 from .cp_resolver_admin import CpResolverAdmin
 from .bs_line_admin import BSLineAdmin
+from .cash_line_admin import CashLineAdmin
+from .cash_transfer_admin import CashTransferAdmin
+from .cash_resolver_admin import CashResolverAdmin

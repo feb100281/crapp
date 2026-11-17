@@ -15,6 +15,7 @@
 --   BANK     — разноска строки выписки (BSLineAlloc)
 --   UNALLOC  — строка выписки (или её неразнесённый остаток) без статьи
 --   FEE      — комиссия, удержанная банком из поступления → 121103
+--   CASH     — касса: разноска строк 1С и сдача в банк по выпискам (420500)
 --   DEBT     — «с уч. гаш. долга», удержанное банком из эквайринга → 121103 «Эквайринг и СБП»
 --
 -- Удержания раскладываются ЗДЕСЬ, автоматически: поступление показывается
@@ -136,6 +137,43 @@ flows_raw AS (
            ln.description, ln.cp_name, ln.inn_adjust
     FROM ln_src ln
     WHERE ln.debt > 0
+
+    UNION ALL
+
+    -- касса: разноска строк карточки 50 (сдачи в банк здесь нет — см. cash_reval.sql)
+    SELECT 'CASH', NULL, NULL,
+           m.ba_id, m.d, al.cf_item_id,
+           CASE WHEN al.direction = 1 THEN 1 ELSE -1 END * al.amount::DOUBLE,
+           m.description, m.cp_name, NULL
+    FROM target_db.treasury_cashlinealloc al
+    JOIN cash_desk_moves m ON m.src = 'CASH' AND m.ref_id = al.line_id
+
+    UNION ALL
+
+    -- касса без разноски (или неразнесённый хвост)
+    SELECT 'UNALLOC', NULL, NULL,
+           u.ba_id, u.d, NULL, u.signed,
+           u.description, u.cp_name, NULL
+    FROM (
+        SELECT m.ba_id, m.d, m.description, m.cp_name,
+               (m.dt - m.cr) - COALESCE(sum(CASE WHEN al.direction = 1 THEN 1 ELSE -1 END
+                                            * al.amount::DOUBLE), 0) AS signed
+        FROM cash_desk_moves m
+        LEFT JOIN target_db.treasury_cashlinealloc al ON al.line_id = m.ref_id
+        WHERE m.src = 'CASH'
+        GROUP BY m.ref_id, m.ba_id, m.d, m.description, m.cp_name, m.dt, m.cr
+    ) u
+    WHERE abs(u.signed) > 0.005
+
+    UNION ALL
+
+    -- сдача в банк: по взносам из выписок → 420500 «Выдача наличных из кассы на счёт»
+    SELECT 'CASH', NULL, NULL,
+           m.ba_id, m.d, (SELECT id FROM cf_items WHERE code = '420500'),
+           -m.cr,
+           m.description, m.cp_name, NULL
+    FROM cash_desk_moves m
+    WHERE m.src = 'CASH_TO_BANK'
 )
 SELECT
     r.source,
@@ -283,7 +321,7 @@ SELECT
     strftime(r.date, '%Y-%m')     AS period,
 
     -- чтобы витрина была самодостаточной (без справочников на сервере)
-    b.name                        AS bank_name,
+    COALESCE(b.name, CASE WHEN a.ba_type = 'CASH' THEN 'Касса' END) AS bank_name,
     COALESCE(g.name, r.ba_number) AS account_name
 FROM cash_flow_raw r
 LEFT JOIN cf_items i                       ON i.code = r.cf_code

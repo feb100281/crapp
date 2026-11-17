@@ -69,6 +69,7 @@ CHART = [
 
 RUB_GROUP = (Section.ASSETS, 1)
 FX_GROUP = (Section.ASSETS, 2)
+CASH_GROUP = (Section.ASSETS, 3)
 OPENING_ACCOUNT = (Section.EQUITY, 2)
 
 
@@ -89,6 +90,8 @@ def _group(section_number) -> GLAccount:
 
 
 def bank_account_name(ba: BankAccount) -> str:
+    if ba.ba_type == "CASH":
+        return f"Касса {ba.number}"
     bank = (ba.bank.name if ba.bank else "") or "Банк"
     bank = bank.replace("АО", "").replace("ПАО", "").replace("(", "").replace(")", "").strip()
     cur = ba.currency.code if ba.currency else "RUB"
@@ -97,9 +100,9 @@ def bank_account_name(ba: BankAccount) -> str:
 
 
 def sync_bank_accounts() -> int:
-    """Субсчёт под каждый наш банковский счёт, у которого его ещё нет."""
+    """Субсчёт под каждый наш банковский счёт (и кассу — под 1103 «Касса»), у которого его ещё нет."""
     seed_chart()
-    rub, fx = _group(RUB_GROUP), _group(FX_GROUP)
+    rub, fx, cash = _group(RUB_GROUP), _group(FX_GROUP), _group(CASH_GROUP)
     created = 0
 
     for ba in (
@@ -107,7 +110,7 @@ def sync_bank_accounts() -> int:
         .select_related("bank", "currency").order_by("number")
     ):
         is_rub = not ba.currency or ba.currency.code == "RUB"
-        parent = rub if is_rub else fx
+        parent = cash if ba.ba_type == "CASH" else (rub if is_rub else fx)
         last = parent.children.aggregate(m=Max("number"))["m"] or 0
         GLAccount.objects.create(
             parent=parent,

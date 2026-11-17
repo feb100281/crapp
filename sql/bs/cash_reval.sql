@@ -47,6 +47,82 @@ JOIN target_db.gl_glaccount    g ON g.id = l.account_id
 WHERE g.bank_account_id IS NOT NULL;
 
 
+-- Касса — такой же счёт, как банковский (BankAccount с типом CASH, номер = счёт 1С «50.01»).
+-- Движение кассы:
+--   CASH          — строки карточки 50 из 1С, КРОМЕ сдачи в банк (корр. 57.*) и строк,
+--                   которых уже нет в 1С (in_1c = 0)
+--   CASH_TO_BANK  — сдача в банк берётся не из 1С, а из банковских выписок (взносы наличных
+--                   на наши счета), со знаком «расход кассы». Так касса сходится с банком,
+--                   а «деньги в пути» видно как разницу с сальдо 1С.
+CREATE OR REPLACE TEMP TABLE cash_desk_moves AS
+WITH acc AS (
+    SELECT id, number FROM target_db.treasury_bankaccount WHERE ba_type = 'CASH'
+)
+SELECT
+    'CASH'                      AS src,
+    l.id                        AS ref_id,
+    a.id                        AS ba_id,
+    l.date::DATE                AS d,
+    CASE WHEN l.direction = 1 THEN l.amount::DOUBLE ELSE 0 END AS dt,
+    CASE WHEN l.direction = 2 THEN l.amount::DOUBLE ELSE 0 END AS cr,
+    concat_ws(' · ', NULLIF(trim(l.doc_type || ' ' || l.doc_number), ''),
+              NULLIF(l.cf_item_1c, '<...>'), NULLIF(l.doc_comment, ''))    AS description,
+    NULLIF(NULLIF(l.counterparty, ''), '<...>')                            AS cp_name
+FROM target_db.treasury_cashline l
+JOIN acc a ON a.number = l.cash_account
+WHERE CAST(l.in_1c AS INTEGER) = 1
+  AND l.corr_account NOT LIKE '57%'
+
+UNION ALL
+
+-- взносы наличных по выпискам: Альфа 20208 / «Внес.ср» (через 30233), ГПБ 30232 «внесенной … выручки»
+SELECT
+    'CASH_TO_BANK',
+    b.id,
+    (SELECT min(id) FROM acc),
+    b.op_date::DATE,
+    0,
+    b.amount::DOUBLE,
+    'Сдано в банк на ' || ba.number || ' · ' || b.description,
+    'ООО «Космо»'
+FROM target_db.treasury_bsline b
+JOIN target_db.treasury_bankaccount ba ON ba.id = b.ba_account_id
+WHERE b.direction = 1
+  AND EXISTS (SELECT 1 FROM acc)
+  AND (
+        b.cp_ba LIKE '20208%'
+     OR b.description LIKE '%Внес.ср%'
+     OR (b.cp_ba LIKE '30232%' AND regexp_matches(b.description, '(?i)внесенн.*выручк'))
+  );
+
+
+-- «выписка» кассы: период выгрузки 1С, сальдо 1С на начало (до первой строки)
+-- и на конец (после последней) — для сверки и признака «касса не выгружена»
+CREATE OR REPLACE TEMP TABLE cash_desk_accounts AS
+WITH l AS (
+    SELECT
+        a.id AS ba_id,
+        c.date::DATE AS d,
+        c.balance_1c::DOUBLE AS balance_1c,
+        CASE WHEN c.direction = 1 THEN 1 ELSE -1 END * c.amount::DOUBLE AS signed,
+        c.source_file,
+        row_number() OVER (PARTITION BY a.id ORDER BY c.date, c.doc_datetime NULLS FIRST, c.id)      AS rn_first,
+        row_number() OVER (PARTITION BY a.id ORDER BY c.date DESC, c.doc_datetime DESC NULLS LAST, c.id DESC) AS rn_last
+    FROM target_db.treasury_cashline c
+    JOIN target_db.treasury_bankaccount a ON a.ba_type = 'CASH' AND a.number = c.cash_account
+    WHERE CAST(c.in_1c AS INTEGER) = 1
+)
+SELECT
+    ba_id,
+    min(d)                                              AS df,
+    max(d)                                              AS dt_to,
+    max(CASE WHEN rn_first = 1 THEN balance_1c - signed END) AS bb,
+    max(CASE WHEN rn_last = 1 THEN balance_1c END)      AS eb,
+    count(DISTINCT source_file)                         AS files
+FROM l
+GROUP BY ba_id;
+
+
 -- наши счета: валюта, период, входящий остаток.
 -- Остаток на начало — из «Ввода остатков» в главной книге (он идёт оборотом
 -- на свою дату). Если ввода в журнале нет — из первой выписки (opening_stmt).
@@ -59,6 +135,11 @@ WITH st AS (
         bb::DOUBLE        AS bb
     FROM target_db.treasury_statement
     WHERE ba_account_id IS NOT NULL
+
+    UNION ALL
+
+    -- касса: «выписка» = период выгрузки 1С
+    SELECT ba_id, df, dt_to, bb FROM cash_desk_accounts
 ),
 ln AS (
     SELECT ba_account_id AS id, min(op_date::DATE) AS mn, max(op_date::DATE) AS mx
@@ -134,6 +215,12 @@ turnover AS (
         -- проводки главной книги: ввод остатков и корректировки
         SELECT ba_id, d, dt_cur, cr_cur
         FROM gl_cash
+
+        UNION ALL
+
+        -- касса: строки 1С без сдачи в банк + взносы по выпискам
+        SELECT ba_id, d, dt, cr
+        FROM cash_desk_moves
     )
     GROUP BY 1, 2
 ),

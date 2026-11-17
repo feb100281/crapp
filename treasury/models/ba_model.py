@@ -11,6 +11,7 @@ from macro.models.fx_model import Fx
 class BAType(models.TextChoices):
     MAIN = "MAIN", "Основной"
     TRANSIT = "TRANSIT", "Транзитный"
+    CASH = "CASH", "Касса"          # касса из 1С (карточка 50): номер счёта = «50.01»
     
 
 

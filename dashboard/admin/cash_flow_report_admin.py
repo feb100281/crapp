@@ -65,6 +65,7 @@ SOURCE_LABELS = {
     "FEE": ("Комиссия", "info"),
     "DEBT": ("Удержание", "info"),
     "MANUAL": ("Проводка", "primary"),
+    "CASH": ("Касса", "info"),
     "FX": ("Курсовая", "gray"),
 }
 

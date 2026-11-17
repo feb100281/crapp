@@ -1,0 +1,33 @@
+{# Неразнесённые строки резолвера кассы: текст (цифры → #), сколько, на сколько #}
+<div class="pk-pat" x-data="{ q: '' }">
+    <div class="pk-pat-bar">
+        <input type="search" class="pk-input pk-pat-search" placeholder="Поиск: текст, контрагент"
+               x-model.debounce.150ms="q" x-on:keydown.enter.prevent>
+        <span class="pk-cf-hint">Кусок текста отсюда → в «содержит» правила ниже</span>
+    </div>
+    <div class="pk-scroll">
+        <table class="pk-mini-table pk-pat-table">
+            <thead>
+                <tr>
+                    <th class="pk-num">Строк</th>
+                    <th class="pk-num">Сумма, ₽</th>
+                    <th>Период</th>
+                    <th>Текст (наведите — пример)</th>
+                    <th>Контрагенты</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in groups %}
+                    <tr data-s="{{ g.search }}" x-show="!q || $el.dataset.s.includes(q.toLowerCase())">
+                        <td class="pk-num">{{ g.count }}</td>
+                        <td class="pk-num">{{ g.amount_text }}</td>
+                        <td class="pk-num">{{ g.first|date:"m.Y" }}{% if g.first != g.last %}–{{ g.last|date:"m.Y" }}{% endif %}</td>
+                        <td title="{{ g.example }}">{{ g.pattern }}</td>
+                        <td><span class="pk-mini-note">{{ g.top_cps }}</span></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if limited %}<div class="pk-mini-note">Показаны {{ limit }} самых крупных по сумме.</div>{% endif %}
+</div>

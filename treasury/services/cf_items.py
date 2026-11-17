@@ -25,6 +25,7 @@ from django.db import transaction
 from django.db.models import Count, Sum
 
 from ..models.bs_line_alloc_model import BSLineAlloc
+from ..models.cash_line_alloc_model import CashLineAlloc
 from ..models.cf_item_model import CFItem
 from ..models.resolver_rule_model import ResolverRule
 
@@ -56,6 +57,10 @@ def usage() -> dict[int, dict]:
                 .values("cf_item").annotate(n=Count("id"), s=Sum("amount"))):
         out[row["cf_item"]]["allocs"] = row["n"]
         out[row["cf_item"]]["amount"] = row["s"] or Decimal(0)
+    for row in (CashLineAlloc.objects.filter(cf_item__isnull=False).order_by()     # касса
+                .values("cf_item").annotate(n=Count("id"), s=Sum("amount"))):
+        out[row["cf_item"]]["allocs"] += row["n"]
+        out[row["cf_item"]]["amount"] += row["s"] or Decimal(0)
     for row in (_journal_lines().filter(cf_item__isnull=False).order_by()
                 .values("cf_item").annotate(n=Count("id"))):
         out[row["cf_item"]]["journal"] = row["n"]
@@ -66,6 +71,7 @@ def is_used(item: CFItem) -> bool:
     return (
         ResolverRule.objects.filter(cf_item=item).exists()
         or BSLineAlloc.objects.filter(cf_item=item).exists()
+        or CashLineAlloc.objects.filter(cf_item=item).exists()
         or _journal_lines().filter(cf_item=item).exists()
     )
 
@@ -181,6 +187,7 @@ def merge(item: CFItem, target: CFItem, delete: bool = True) -> list[str]:
 
     rules = ResolverRule.objects.filter(cf_item__in=ids).update(cf_item=target)
     allocs = BSLineAlloc.objects.filter(cf_item__in=ids).update(cf_item=target)
+    allocs += CashLineAlloc.objects.filter(cf_item__in=ids).update(cf_item=target)
     journal = _journal_lines().filter(cf_item__in=ids).update(cf_item=target)
     log.insert(0, f"{item.code} {item.name} → {target.code} {target.name}: "
                   f"правил {rules}, строк {allocs}, проводок {journal}")
