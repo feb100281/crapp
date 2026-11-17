@@ -65,8 +65,15 @@ SELECT
     l.date::DATE                AS d,
     CASE WHEN l.direction = 1 THEN l.amount::DOUBLE ELSE 0 END AS dt,
     CASE WHEN l.direction = 2 THEN l.amount::DOUBLE ELSE 0 END AS cr,
+    -- «назначение» кассы: документ · статья 1С · основание · договор · документ расчётов
+    -- (договор «Основной договор» и ссылка документа на самого себя не повторяются)
     concat_ws(' · ', NULLIF(trim(l.doc_type || ' ' || l.doc_number), ''),
-              NULLIF(l.cf_item_1c, '<...>'), NULLIF(l.doc_comment, ''))    AS description,
+              NULLIF(l.cf_item_1c, '<...>'), NULLIF(l.doc_comment, ''),
+              CASE WHEN trim(COALESCE(l.subconto2, '')) NOT IN ('', '<...>', 'Основной договор')
+                   THEN l.subconto2 END,
+              CASE WHEN trim(COALESCE(l.subconto3, '')) NOT IN ('', '<...>')
+                    AND l.subconto3 NOT LIKE l.doc_type || ' ' || l.doc_number || '%'
+                   THEN l.subconto3 END)                                     AS description,
     NULLIF(NULLIF(l.counterparty, ''), '<...>')                            AS cp_name
 FROM target_db.treasury_cashline l
 JOIN acc a ON a.number = l.cash_account

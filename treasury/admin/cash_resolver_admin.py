@@ -48,7 +48,7 @@ class CashResolverAdmin(AppModelAdmin):
     search_help_text = "Название операции, корр. счёт, статья или текст правила"
     list_filter = [OpenFilter, ("direction", ChoicesDropdownFilter)]
     inlines = [ResolverRuleInline]
-    actions_list = ["refresh_all"]
+    actions_list = ["refresh_all", "rebuild_cash_flow"]
 
     readonly_fields = ["name", "direction", "payee", "lines_count", "amount_display",
                        "open_display", "open_patterns_display", "alloc_summary_display"]
@@ -149,4 +149,23 @@ class CashResolverAdmin(AppModelAdmin):
         s = cash_resolver.resolve()
         messages.success(request, f"Новых шаблонов: {new}. Всего: {s['resolvers']}, строк: {s['lines']}, "
                                   f"не разнесено: {s['open']}.")
+        return redirect(reverse("admin:treasury_cashresolver_changelist"))
+
+    @action(
+        description="Пересчитать ДДС (parquet)",
+        url_path="rebuild-cash-flow",
+        icon="table_chart",
+        variant=ActionVariant.DEFAULT,
+    )
+    def rebuild_cash_flow(self, request: HttpRequest):
+        from ..services.cash_reports import build as build_cash_reports
+
+        s = build_cash_reports(log=lambda *_: None)
+        if s.get("skipped"):
+            messages.warning(request, "ДДС не пересчитан: нет курсов ЦБ (запустите «Импорт курсов»)")
+        else:
+            level = messages.success if not s["off"] else messages.warning
+            level(request,
+                  f"ДДС пересчитан: строк {s['rows']}, не разнесено {s['unalloc']} на {money(s['unalloc_rub'])} ₽. "
+                  + ("Остатки сходятся." if not s["off"] else f"Не сходится счетов: {s['off']}."))
         return redirect(reverse("admin:treasury_cashresolver_changelist"))

@@ -296,7 +296,37 @@ class BSLineAdmin(AppModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         self._req.path = request.get_full_path()      # куда вернуться после резолвера
+        self._cash_hint(request)
         return super().changelist_view(request, extra_context)
+
+    def _cash_hint(self, request) -> None:
+        """Поиск по выпискам: сколько нашлось по тому же запросу в кассе — со ссылкой."""
+        from urllib.parse import urlencode
+
+        from django.contrib import messages
+        from django.db.models import Q, Sum
+
+        from ..models.cash_line_model import CashLine
+
+        q = (request.GET.get("q") or "").strip()
+        cash_admin = self.admin_site._registry.get(CashLine)
+        if not q or cash_admin is None or not cash_admin.has_view_permission(request):
+            return
+        found, _ = cash_admin.get_search_results(request, CashLine.objects.all(), q)
+        n = found.count()
+        if not n:
+            return
+        agg = found.aggregate(inflow=Sum("amount", filter=Q(direction=Direction.INFLOW)),
+                              outflow=Sum("amount", filter=Q(direction=Direction.OUTFLOW)))
+        url = reverse("admin:treasury_cashline_changelist") + "?" + urlencode({"q": q})
+        word = "операция" if n % 10 == 1 and n % 100 != 11 else \
+            "операции" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "операций"
+        money_ = lambda v: f"{v or 0:,.0f}".replace(",", "\u00a0")  # noqa: E731
+        sums = " · ".join(f"{label} {money_(agg[key])}\u00a0₽" for key, label in
+                          (("inflow", "приход"), ("outflow", "расход")) if agg[key])
+        messages.info(request, format_html(
+            'В кассе тоже нашлось: {} {} ({}) — <a href="{}" class="pk-cf-link">открыть →</a>',
+            n, word, sums, url))
 
     @display(description="Разноска · резолвер", ordering="alloc_count")
     def alloc_display(self, obj: BSLine):

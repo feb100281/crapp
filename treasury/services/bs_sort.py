@@ -225,12 +225,20 @@ SHORTS = {short for _, short in BANKS}
 ACC_DIR = re.compile(r"^[A-Z0-9]{3} \d{20}$")
 
 
+OUR_NAME = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+
 def _placed(parts: tuple) -> bool:
-    """Файл уже лежит в структуре БАНК / ВАЛЮТА СЧЁТ / … — повторно не трогаем."""
+    """
+    Файл уже разложен — повторно не трогаем: БАНК / ВАЛЮТА СЧЁТ / ГОД / ГГГГ-ММ-ДД….
+    Файл, брошенный вручную в папку банка или счёта, раскладывается заново.
+    """
     if parts and parts[0] == PDF_DIR:
         parts = parts[1:]
-    return (len(parts) >= 3 and parts[0] in SHORTS
-            and (ACC_DIR.match(parts[1]) is not None or parts[1] in (OTHER, "АРХИВЫ")))
+    if len(parts) == 3 and parts[0] in SHORTS and parts[1] in (OTHER, "АРХИВЫ"):
+        return True
+    return (len(parts) == 4 and parts[0] in SHORTS and ACC_DIR.match(parts[1]) is not None
+            and re.fullmatch(r"\d{4}", parts[2]) is not None and OUR_NAME.match(parts[3]) is not None)
 
 
 def _skip(rel: Path) -> bool:

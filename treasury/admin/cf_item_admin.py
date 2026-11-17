@@ -18,7 +18,7 @@ from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
-from django.urls import path, reverse
+from django.urls import NoReverseMatch, path, reverse
 from django.utils.html import format_html
 
 from unfold.contrib.filters.admin import ChoicesDropdownFilter
@@ -74,8 +74,17 @@ def _usage_text(rules: int, allocs: int, amount, journal: int = 0) -> str:
     return " · ".join(parts)
 
 
-KIND_SHORT = {"KBK": "КБК", "BA": "Счёт", "IC": "Свои счета", "CP": "Контрагент"}
-RESOLVER_ADMIN = {"KBK": "kbkresolver", "BA": "baresolver", "IC": "icresolver", "CP": "cpresolver"}
+KIND_SHORT = {"KBK": "КБК", "BA": "Счёт", "IC": "Свои счета", "CP": "Контрагент", "CASH": "Касса"}
+RESOLVER_ADMIN = {"KBK": "kbkresolver", "BA": "baresolver", "IC": "icresolver", "CP": "cpresolver",
+                  "CASH": "cashresolver"}
+
+
+def _resolver_url(kind: str, pk: int) -> str:
+    """Карточка резолвера; для нового вида без своей админки — без ссылки, а не ошибка."""
+    try:
+        return reverse(f"admin:treasury_{RESOLVER_ADMIN.get(kind, 'resolver')}_change", args=[pk])
+    except NoReverseMatch:
+        return ""
 
 
 def _resolvers_by_item() -> dict[int, list[dict]]:
@@ -93,8 +102,7 @@ def _resolvers_by_item() -> dict[int, list[dict]]:
             "kind": kind,
             "kind_label": KIND_SHORT.get(kind, kind),
             "label": f"{label} · {Direction(r['resolver__direction']).label.lower()}",
-            "url": reverse(f"admin:treasury_{RESOLVER_ADMIN.get(kind, 'resolver')}_change",
-                           args=[r["resolver_id"]]),
+            "url": _resolver_url(kind, r["resolver_id"]),
             "n": r["n"],
         })
     return out

@@ -131,6 +131,59 @@ def _attach_links(rows) -> None:
                             "Завести резолвер контрагента — он важнее КБК и счёта"))
 
 
+def _attach_cash_links(rows) -> None:
+    """
+    Строки кассы в расшифровке ДДС: операция кассы, резолвер кассы, который её разнёс,
+    и шаблон, куда добавить правило. Строку кассы находим по дате и документу
+    из описания («Поступление наличных 00000000720 · …»).
+    """
+    from treasury.models.cash_line_model import CashLine
+    from treasury.models.resolver_model import Resolver, ResolverKind
+    from treasury.services.cash_resolver import key_for, op_name
+
+    cash = []
+    for r in rows:
+        if r.line_id or r.journal_line_id or r.source not in ("CASH", "UNALLOC") or r.cf_code == "420500":
+            continue
+        head = (r.description or "").split(" · ", 1)[0].strip()
+        doc_type, _, number = head.rpartition(" ")
+        if doc_type and number:
+            cash.append((r, doc_type, number))
+    if not cash:
+        return
+
+    found: dict[tuple, list] = defaultdict(list)
+    qs = (CashLine.objects.filter(date__in={r.date for r, _, _ in cash},
+                                  doc_number__in={n for _, _, n in cash})
+          .prefetch_related("allocs__resolver_rule__resolver"))
+    for ln in qs:
+        found[(ln.date, ln.doc_type, ln.doc_number)].append(ln)
+    templates = {(x.key, x.direction): x for x in Resolver.objects.filter(kind=ResolverKind.CASH)}
+
+    for r, doc_type, number in cash:
+        lines = found.get((r.date, doc_type, number))
+        if not lines:
+            continue
+        amount = abs(r.amount_cur or 0)
+        line = next((ln for ln in lines if abs(float(ln.amount) - amount) < 0.01), lines[0])
+        r.links = [("Операция", reverse("admin:treasury_cashline_change", args=[line.pk]),
+                    "Открыть операцию кассы: разноска руками")]
+        alloc = next((a for a in line.allocs.all() if a.cf_item_id), None)
+        rule_res = alloc.resolver_rule.resolver if alloc and alloc.resolver_rule_id else None
+        if rule_res:
+            r.how = "резолвер"
+            r.links.append(("Разнёс: Касса", reverse("admin:treasury_cashresolver_change", args=[rule_res.pk]),
+                            "Резолвер кассы, правило которого разнесло операцию"))
+        elif alloc and alloc.manual:
+            r.how = "руками"
+        else:
+            r.how = "не разнесено"
+        tpl = templates.get((key_for(op_name(line)), line.direction))
+        if tpl and tpl != rule_res:
+            r.links.append(("+ правило: Касса", reverse("admin:treasury_cashresolver_change", args=[tpl.pk]),
+                            f"Шаблон кассы «{tpl.name}» — добавить правило"))
+
+
 KIND_LABELS = {"KBK": "КБК", "BA": "Счёт", "CP": "Контрагент", "IC": "Свои счета"}
 
 ALL = "all"      # ?y=all — весь период
@@ -842,6 +895,7 @@ class CashFlowReportAdmin(DashboardAdmin):
             r.badge = Badge(label, None, style).badge
             r.rub_cell = money_cell(r.amount_rub, signed=True)
         _attach_links(rows)
+        _attach_cash_links(rows)
 
         first = rows[0] if rows else None
         if g.get("cf") and first:
