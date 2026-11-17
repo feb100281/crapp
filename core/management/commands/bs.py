@@ -327,6 +327,18 @@ class Command(BaseCommand):
                         writelog(log, f"     ВНИМАНИЕ: раскладка не выполнена ({sort_exc})")
                     writelog(log, line)
 
+                # резервная копия разложенных выписок (например, Nextcloud → рабочий стол)
+                if params.get("backup"):
+                    writelog(log, f"Резервная копия → {params['backup']} ....")
+                    try:
+                        from treasury.services.bs_sort import backup_folder
+
+                        backup_folder(source, Path(params["backup"]).expanduser(),
+                                      log=lambda text: writelog(log, text))
+                    except Exception as backup_exc:            # копия не мешает загрузке
+                        writelog(log, f"     ВНИМАНИЕ: резервная копия не сделана ({backup_exc})")
+                    writelog(log, line)
+
                 # PDF-выписки без txt: сначала делаем из них txt в формате 1С
                 pdf_dir = source / params.get("pdf", PDF_DIR)
                 if pdf_dir.is_dir():

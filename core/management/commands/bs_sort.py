@@ -5,7 +5,8 @@
 посмотреть план или разложить без загрузки.
 
 Параметры задачи (Jobs.param), необязательные:
-    {"source": "...", "dry_run": true}   # папка (по умолчанию — из «Выписок»), только показать план
+    {"source": "...", "backup": "...", "dry_run": true}
+    # папка и резервная копия (по умолчанию — из «Выписок»), только показать план
 """
 
 from pathlib import Path
@@ -23,6 +24,11 @@ LINE = "=" * 60
 def statements_folder() -> str | None:
     job = Jobs.objects.filter(command="bs").first()
     return (job.param or {}).get("source") if job else None
+
+
+def statements_backup() -> str | None:
+    job = Jobs.objects.filter(command="bs").first()
+    return (job.param or {}).get("backup") if job else None
 
 
 class Command(BaseCommand):
@@ -49,6 +55,12 @@ class Command(BaseCommand):
                 root = Path(source).expanduser().resolve()
                 writelog(f"Папка: {root}")
                 stats = sort_folder(root, known_accounts(), apply=not params.get("dry_run"), log=writelog)
+                backup = params.get("backup") or statements_backup()
+                if backup and not params.get("dry_run"):
+                    from treasury.services.bs_sort import backup_folder
+
+                    writelog(LINE)
+                    backup_folder(root, Path(backup).expanduser(), log=writelog)
                 writelog(LINE)
                 writelog(f"Итог: {stats}")
                 writelog("DONE")

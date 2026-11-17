@@ -334,3 +334,39 @@ def known_accounts() -> dict[str, str]:
     from treasury.models.ba_model import BankAccount
 
     return {a.number: (a.bank.name if a.bank else "") for a in BankAccount.objects.select_related("bank")}
+
+
+def backup_folder(src: Path, dst: Path, log=print) -> dict:
+    """
+    Резервная копия: файлы из src, которых нет в dst, копируются с той же структурой папок.
+    В dst ничего не удаляется и не перезаписывается: другой файл под тем же именем
+    сохраняется рядом с пометкой «(копия ГГГГ-ММ-ДД)». Сравнение по пути и размеру —
+    без чтения файлов, чтобы не скачивать весь облачный архив при каждом запуске.
+    Служебные папки и файлы на «_» и готовые txt из PDF не копируются.
+    """
+    import shutil
+
+    src, dst = Path(src), Path(dst)
+    stats = {"copied": 0, "renamed": 0, "same": 0}
+    for path in sorted(src.rglob("*")):
+        rel = path.relative_to(src)
+        if (not path.is_file() or rel.name.startswith(".")
+                or any(part.startswith("_") for part in rel.parts) or rel.parts[:2] == (PDF_DIR, PDF_OUT)):
+            continue
+        target = dst / rel
+        if target.exists():
+            if target.stat().st_size == path.stat().st_size:
+                stats["same"] += 1
+                continue
+            target = target.with_name(f"{target.stem} (копия {date.today():%Y-%m-%d}){target.suffix}")
+            if target.exists():
+                stats["same"] += 1
+                continue
+            stats["renamed"] += 1
+        make_dirs(dst, target.parent)
+        shutil.copy2(path, target)
+        stats["copied"] += 1
+        log(f"  → резерв: {rel}" + ("" if target.name == rel.name else f"  (как {target.name})"))
+    log(f"Резервная копия: скопировано {stats['copied']} (из них под новым именем {stats['renamed']}), "
+        f"уже были {stats['same']}")
+    return stats
