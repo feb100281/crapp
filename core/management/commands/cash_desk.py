@@ -1,5 +1,5 @@
 """
-Касса: карточки счёта 50 из 1С (Excel) → data/parquet/cash/.
+Касса: карточки счёта 50 из 1С (Excel) → data/parquet/cash/ и строки в базу (CashLine).
 
     cash_desk.parquet        — строки карточек (приход/расход, корр. счёт, аналитика)
     cash_desk_files.parquet  — итоги каждого файла: сальдо и обороты для сверки
@@ -76,6 +76,19 @@ class Command(BaseCommand):
                 writelog(LINE)
                 writelog(f"Записано: {out / 'cash_desk.parquet'} ({len(rows)} строк), "
                          f"{out / 'cash_desk_files.parquet'} ({len(files)} файлов)")
+
+                # строки кассы в базу (Казначейство → Операции по кассе)
+                writelog(LINE)
+                writelog("Строки кассы в базу ....")
+                from treasury.services.cash_lines import sync_cash_lines
+                sync_cash_lines(rows, files, log=lambda t: writelog("     " + t))
+
+                writelog("Резолверы кассы ....")
+                from treasury.services import cash_resolver
+                new = cash_resolver.sync()
+                st = cash_resolver.resolve()
+                writelog(f"     новых шаблонов: {new}, всего: {st['resolvers']}, строк: {st['lines']}, "
+                         f"не разнесено: {st['open']}")
                 writelog("DONE")
                 job.status = JobStatus.DONE
             except Exception as exc:

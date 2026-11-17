@@ -214,6 +214,12 @@ UNFOLD_SETTINGD = {
                         "link": reverse_lazy("admin:treasury_icresolver_changelist"),
                         "permission": view("treasury.icresolver"),
                     },
+                    {
+                        "title": "Касса",
+                        "icon": "point_of_sale",
+                        "link": reverse_lazy("admin:treasury_cashline_changelist"),
+                        "permission": view("treasury.cashline"),
+                    },
                 ],
             },
             
@@ -292,6 +298,26 @@ UNFOLD_SETTINGD = {
                     "title": "Между своими",
                     "link": reverse_lazy("admin:treasury_icresolver_changelist"),
                     "permission": view("treasury.icresolver"),
+                },
+            ],
+        },
+        {
+            "models": ["treasury.cashline", "treasury.cashtransfer", "treasury.cashresolver"],
+            "items": [
+                {
+                    "title": "Операции по кассе",
+                    "link": reverse_lazy("admin:treasury_cashline_changelist"),
+                    "permission": view("treasury.cashline"),
+                },
+                {
+                    "title": "Резолверы кассы",
+                    "link": reverse_lazy("admin:treasury_cashresolver_changelist"),
+                    "permission": view("treasury.cashresolver"),
+                },
+                {
+                    "title": "Касса → банк",
+                    "link": reverse_lazy("admin:treasury_cashtransfer_changelist"),
+                    "permission": view("treasury.cashtransfer"),
                 },
             ],
         },

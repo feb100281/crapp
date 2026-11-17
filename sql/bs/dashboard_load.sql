@@ -51,7 +51,7 @@ SELECT
     c.ba_id,
     c.number                                      AS ba_number,
     COALESCE(g.name, c.number)                    AS account_name,
-    b.name                                        AS bank_name,
+    COALESCE(b.name, CASE WHEN a.ba_type = 'CASH' THEN 'Касса' END) AS bank_name,
     c.currency,
     c.rate_prev,
     c.rate,
@@ -128,6 +128,11 @@ last_st AS (
     SELECT ba_id, max(dt) AS stmt_to, arg_max(eb, dt) AS bank_eb, count(*) AS statements
     FROM st
     GROUP BY ba_id
+
+    UNION ALL
+
+    -- касса: сверка с сальдо 1С на последний день выгрузки (разница = деньги в пути)
+    SELECT ba_id, dt_to, eb, files FROM cash_desk_accounts
 ),
 seq AS (
     SELECT
@@ -201,7 +206,7 @@ SELECT
     k.ba_id,
     k.number                                    AS ba_number,
     COALESCE(g.name, k.number)                  AS account_name,
-    b.name                                      AS bank_name,
+    COALESCE(b.name, CASE WHEN a.ba_type = 'CASH' THEN 'Касса' END) AS bank_name,
     c.currency,
     strftime(l.stmt_to, '%Y-%m-%d')             AS stmt_to,
     l.statements,

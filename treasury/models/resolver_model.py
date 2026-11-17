@@ -47,6 +47,7 @@ class ResolverKind(models.TextChoices):
     BA = "BA", "Счёт контрагента"
     IC = "IC", "Между своими счетами"
     CP = "CP", "Контрагент"
+    CASH = "CASH", "Касса"
 
 
 class Resolver(models.Model):
@@ -193,3 +194,19 @@ class CpResolver(Resolver):
         if self.match_name:
             self.key = name_key(self.match_name)
         super().save(*args, **kwargs)
+
+
+class CashResolverManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(kind=ResolverKind.CASH)
+
+
+class CashResolver(Resolver):
+    """Резолверы кассы: шаблон = название операции из 1С + направление."""
+
+    objects = CashResolverManager()
+
+    class Meta:
+        proxy = True
+        verbose_name = "Резолвер кассы"
+        verbose_name_plural = "Резолверы кассы"
