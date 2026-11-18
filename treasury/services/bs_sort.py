@@ -218,7 +218,16 @@ def target_for(root: Path, path: Path, info: Info) -> Path:
     if not info.d1:
         return folder / OTHER / path.name
     span = f"{info.d1:%Y-%m-%d}" if info.d1 == info.d2 else f"{info.d1:%Y-%m-%d}_{info.d2:%Y-%m-%d}"
-    return folder / f"{info.d2:%Y}" / f"{span}{tag(path.name)}{ext}"
+    return folder / f"{info.d2:%Y}" / month_dir(info.d2) / f"{span}{tag(path.name)}{ext}"
+
+
+MONTH_NAMES = ("Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+               "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь")
+
+
+def month_dir(d: date) -> str:
+    """Папка месяца по дате окончания выписки: «03. Март»."""
+    return f"{d.month:02d}. {MONTH_NAMES[d.month - 1]}"
 
 
 SHORTS = {short for _, short in BANKS}
@@ -230,15 +239,46 @@ OUR_NAME = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 def _placed(parts: tuple) -> bool:
     """
-    Файл уже разложен — повторно не трогаем: БАНК / ВАЛЮТА СЧЁТ / ГОД / ГГГГ-ММ-ДД….
+    Файл уже разложен — повторно не трогаем: БАНК / ВАЛЮТА СЧЁТ / ГОД / ММ. Месяц / ГГГГ-ММ-ДД….
     Файл, брошенный вручную в папку банка или счёта, раскладывается заново.
     """
     if parts and parts[0] == PDF_DIR:
         parts = parts[1:]
     if len(parts) == 3 and parts[0] in SHORTS and parts[1] in (OTHER, "АРХИВЫ"):
         return True
-    return (len(parts) == 4 and parts[0] in SHORTS and ACC_DIR.match(parts[1]) is not None
-            and re.fullmatch(r"\d{4}", parts[2]) is not None and OUR_NAME.match(parts[3]) is not None)
+    return (len(parts) == 5 and parts[0] in SHORTS and ACC_DIR.match(parts[1]) is not None
+            and re.fullmatch(r"\d{4}", parts[2]) is not None and MONTH_DIR.match(parts[3]) is not None
+            and OUR_NAME.match(parts[4]) is not None)
+
+
+MONTH_DIR = re.compile(r"^\d{2}\. \S+$")
+
+
+def regroup_months(root: Path, log=print) -> int:
+    """
+    Переход на папки месяцев: файлы старой раскладки БАНК / СЧЁТ / ГОД / файл
+    переносятся в ГОД / «ММ. Месяц» по последней дате в имени. Ничего не перезаписывает.
+    """
+    root, moved = Path(root), 0
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        parts = path.relative_to(root).parts
+        if parts and parts[0] == PDF_DIR:
+            parts = parts[1:]
+        if not (len(parts) == 4 and parts[0] in SHORTS and ACC_DIR.match(parts[1])
+                and re.fullmatch(r"\d{4}", parts[2]) and OUR_NAME.match(parts[3])):
+            continue
+        last = re.findall(r"\d{4}-\d{2}-\d{2}", parts[3])[-1]
+        target = path.parent / month_dir(date.fromisoformat(last)) / path.name
+        if target.exists():
+            continue
+        make_dirs(root, target.parent)
+        path.rename(target)
+        moved += 1
+    if moved:
+        log(f"По папкам месяцев перенесено файлов: {moved}")
+    return moved
 
 
 def _skip(rel: Path) -> bool:
@@ -250,6 +290,8 @@ def _skip(rel: Path) -> bool:
 def sort_folder(root: Path, known: dict[str, str], apply: bool = True, log=print) -> dict:
     """known — номер счёта → название банка. apply=False — только показать план."""
     root = Path(root)
+    if apply:
+        regroup_months(root, log)
     files = [p for p in sorted(root.rglob("*")) if p.is_file() and not _skip(p.relative_to(root))]
     # сначала txt: по ним PDF той же папки узнают свой период
     files.sort(key=lambda p: (p.suffix.lower() != ".txt", str(p)))
@@ -355,6 +397,8 @@ def backup_folder(src: Path, dst: Path, log=print) -> dict:
     import shutil
 
     src, dst = Path(src), Path(dst)
+    if dst.exists():
+        regroup_months(dst, log)
     stats = {"copied": 0, "renamed": 0, "same": 0}
     for path in sorted(src.rglob("*")):
         rel = path.relative_to(src)
