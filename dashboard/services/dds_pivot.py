@@ -182,13 +182,27 @@ def _table(last_row: int) -> str:
     cols = "".join(f'<tableColumn id="{i + 1}" name="{_a(f.name)}"/>' for i, f in enumerate(FIELDS))
     return (HEAD + f'<table {NS} id="1" name="raw_cf" displayName="raw_cf" ref="{ref}" totalsRowShown="0">'
             f'<autoFilter ref="{ref}"/><tableColumns count="{len(FIELDS)}">{cols}</tableColumns>'
-            '<tableStyleInfo name="TableStyleLight1" showFirstColumn="0" showLastColumn="0" '
+            '<tableStyleInfo name="CosmoTable" showFirstColumn="0" showLastColumn="0" '
             'showRowStripes="1" showColumnStripes="0"/></table>')
+
+
+def _normalize(rows: list) -> None:
+    """
+    Excel сравнивает элементы сводной без учёта регистра и не принимает длиннее
+    255 символов: «ИП Иванов» и «ИП ИВАНОВ» — один элемент. Приводим такие значения
+    к первому написанию, иначе Excel считает книгу повреждённой.
+    """
+    for i in ROW_FIELDS + COL_FIELDS + PAGE_FIELDS:
+        seen: dict[str, str] = {}
+        for r in rows:
+            v = " ".join(_txt(r[i]).split())[:255].rstrip() or "—"
+            r[i] = seen.setdefault(v.casefold(), v)
 
 
 def _items(rows: list) -> dict[int, list[str]]:
     """Значения полей сводной (строки, колонки, фильтры) — отсортированные."""
-    return {i: sorted({_txt(r[i]) for r in rows}) for i in ROW_FIELDS + COL_FIELDS + PAGE_FIELDS}
+    return {i: sorted({r[i] for r in rows}, key=lambda v: (v.casefold(), v))
+            for i in ROW_FIELDS + COL_FIELDS + PAGE_FIELDS}
 
 
 def _cache(rows: list, items: dict) -> str:
@@ -257,7 +271,7 @@ def _pivot(items: dict) -> str:
             f'<pageFields count="{len(PAGE_FIELDS)}">{pages}</pageFields>'
             f'<dataFields count="1"><dataField name="Сумма, ₽ " fld="{DATA_FIELD}" baseField="0" baseItem="0" '
             f'numFmtId="{AMOUNT_FMT}"/></dataFields>'
-            '<pivotTableStyleInfo name="PivotStyleLight16" showRowHeaders="1" showColHeaders="1" '
+            '<pivotTableStyleInfo name="CosmoPivot" showRowHeaders="1" showColHeaders="1" '
             'showRowStripes="0" showColStripes="0" showLastColumn="1"/></pivotTableDefinition>')
 
 
@@ -265,6 +279,47 @@ def _pivot_sheet() -> str:
     return (HEAD + f'<worksheet {NS} {NS_R}><sheetViews><sheetView tabSelected="1" workbookViewId="0"/>'
             '</sheetViews><cols><col min="1" max="1" width="60" customWidth="1"/>'
             '<col min="2" max="80" width="15" customWidth="1"/></cols><sheetData/></worksheet>')
+
+
+# цвета — как в «красивом» Excel-отчёте (core.reports.xlsx)
+GREEN, GREEN_2, GREEN_3 = "2F6656", "3D7A67", "1F5E4E"
+LIGHT, LIGHT_2, ZEBRA, LINE = "E7F1ED", "F3F8F6", "F7F7F7", "D9D9D9"
+
+
+def _dxf(fill=None, color=None, bold=False, top=None, bottom=None) -> str:
+    font = ""
+    if bold or color:
+        font = "<font>" + ("<b/>" if bold else "") + (f'<color rgb="FF{color}"/>' if color else "") + "</font>"
+    fill_xml = (f'<fill><patternFill patternType="solid"><fgColor rgb="FF{fill}"/>'
+                f'<bgColor rgb="FF{fill}"/></patternFill></fill>') if fill else ""
+    border = ""
+    if top or bottom:
+        border = ("<border>" + (f'<top style="thin"><color rgb="FF{top}"/></top>' if top else "")
+                  + (f'<bottom style="thin"><color rgb="FF{bottom}"/></bottom>' if bottom else "") + "</border>")
+    return f"<dxf>{font}{fill_xml}{border}</dxf>"
+
+
+DXFS = [
+    _dxf(bottom=LINE),                                   # 0 вся таблица — тонкие линии
+    _dxf(fill=GREEN, color="FFFFFF", bold=True),         # 1 шапка
+    _dxf(fill=GREEN_3, color="FFFFFF", bold=True),       # 2 общий итог
+    _dxf(fill=GREEN_2, color="FFFFFF", bold=True),       # 3 деятельность
+    _dxf(fill=LIGHT, color=GREEN_3, bold=True),          # 4 направление
+    _dxf(fill=LIGHT_2, bold=True),                       # 5 статья
+    _dxf(color=GREEN, bold=True),                        # 6 подписи фильтров
+    _dxf(fill=LIGHT_2, color=GREEN_3, bold=True, bottom=GREEN),  # 7 значения фильтров
+    _dxf(fill=ZEBRA),                                    # 8 полоса таблицы данных
+]
+PIVOT_STYLE = [("wholeTable", 0), ("headerRow", 1), ("firstHeaderCell", 1), ("totalRow", 2),
+               ("firstRowSubheading", 3), ("secondRowSubheading", 4), ("thirdRowSubheading", 5),
+               ("pageFieldLabels", 6), ("pageFieldValues", 7)]
+TABLE_STYLE = [("wholeTable", 0), ("headerRow", 1), ("firstRowStripe", 8)]
+
+
+def _table_style(name: str, pivot: bool, elements) -> str:
+    els = "".join(f'<tableStyleElement type="{t}" dxfId="{d}"/>' for t, d in elements)
+    kind = 'table="0"' if pivot else 'pivot="0"'
+    return f'<tableStyle name="{name}" {kind} count="{len(elements)}">{els}</tableStyle>'
 
 
 STYLES = (HEAD + f'<styleSheet {NS}>'
@@ -279,7 +334,10 @@ STYLES = (HEAD + f'<styleSheet {NS}>'
           f'<xf numFmtId="{AMOUNT_FMT}" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>'
           '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>'
           '<cellStyles count="1"><cellStyle name="Обычный" xfId="0" builtinId="0"/></cellStyles>'
-          '</styleSheet>')
+          f'<dxfs count="{len(DXFS)}">{"".join(DXFS)}</dxfs>'
+          '<tableStyles count="2" defaultTableStyle="CosmoTable" defaultPivotStyle="CosmoPivot">'
+          + _table_style("CosmoPivot", True, PIVOT_STYLE) + _table_style("CosmoTable", False, TABLE_STYLE)
+          + '</tableStyles></styleSheet>')
 
 CT = "application/vnd.openxmlformats-officedocument.spreadsheetml"
 CONTENT_TYPES = (
@@ -308,6 +366,8 @@ def build(rows) -> bytes:
     if not rows:
         rows = [[date.today(), str(date.today().year), f"{date.today().month:02d}. {MONTHS[date.today().month - 1]}",
                  "—", "—", "", "—", "—", "—", "—", "—", "", "", 0.0, None, ""]]
+    rows = [list(r) for r in rows]
+    _normalize(rows)
     items = _items(rows)
     sst = _Strings()
     data = _data_sheet(rows, sst)
