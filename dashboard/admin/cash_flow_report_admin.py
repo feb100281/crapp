@@ -5,7 +5,7 @@
 подстатья, «Не разнесено», курсовые, чистый поток, остаток на конец.
 Колонки: месяцы, кварталы или годы — за выбранный год или за весь период.
 Клик по сумме — модалка с операциями этой строки за этот период.
-Отчёт и операции выгружаются в Excel и CSV.
+Отчёт и операции выгружаются в Excel и CSV, строки — в Excel со сводной таблицей.
 
 Остаток на начало периода = все строки ДДС до начала периода (включая ввод
 остатков) + ввод остатков новых счетов внутри периода. Остаток на конец =
@@ -331,6 +331,12 @@ class CashFlowReportAdmin(DashboardAdmin):
                 return csv_response(*self._csv(report), name)
             if export == "xlsx":
                 return xlsx_response(self._book(request, base, flt, year, report), name)
+            if export == "pivot":
+                from ..services import dds_pivot
+
+                qs = base if year is None else base.filter(year=year)
+                return xlsx_response(dds_pivot.build(dds_pivot.rows_from(qs)),
+                                     "Сводная ДДС " + report["period_name"])
 
         ctx = {
             **self.admin_site.each_context(request),

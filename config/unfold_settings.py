@@ -33,7 +33,7 @@ UNFOLD_SETTINGD = {
     },
     "STYLES": [
         lambda request: static("css/output.css"),
-        lambda request: static("css/cosmo.css") + "?v=62",  # сбросить кэш браузера при правках
+        lambda request: static("css/cosmo.css") + "?v=63",  # сбросить кэш браузера при правках
     ],
     "SIDEBAR": {
         "show_search": True,

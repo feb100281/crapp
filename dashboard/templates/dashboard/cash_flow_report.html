@@ -50,8 +50,14 @@
                         x-on:click="Object.keys(open).forEach(k => open[k] = !/r/.test(k))">Свернуть статьи</button>
                 <span class="pk-cf-hint">Клик по месяцу в шапке — дни · клик по сумме — операции</span>
                 {% if days_open %}<a href="{{ days_reset }}" class="pk-seg-item">Свернуть все дни</a>{% endif %}
-                <a href="?{{ query_full }}&export=xlsx" class="pk-btn pk-btn-excel"><span class="material-symbols-outlined">download</span>Excel</a>
-                <a href="?{{ query_full }}&export=csv" class="pk-btn"><span class="material-symbols-outlined">download</span>CSV</a>
+                <div class="pk-dl" x-data="{ dl: false }" x-on:click.outside="dl = false" x-on:keydown.escape="dl = false">
+                    <button type="button" class="pk-btn pk-btn-excel" x-on:click="dl = !dl">Скачать<span class="pk-dl-arrow">▾</span></button>
+                    <div class="pk-dl-menu" x-show="dl" x-cloak x-transition.opacity>
+                        <a href="?{{ query_full }}&export=xlsx" x-on:click="dl = false"><b>Excel</b><span>отчёт как на экране</span></a>
+                        <a href="?{{ query_full }}&export=pivot" x-on:click="dl = false"><b>Сводная таблица</b><span>Excel: все операции + сводная с фильтром по банку / кассе</span></a>
+                        <a href="?{{ query_full }}&export=csv" x-on:click="dl = false"><b>CSV</b><span>отчёт для загрузки в другие программы</span></a>
+                    </div>
+                </div>
             </div>
             <div class="pk-cf-scroll">
                 <table class="pk-cf-table">

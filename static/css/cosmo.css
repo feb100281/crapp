@@ -398,3 +398,20 @@ html.dark .pm-cb { accent-color: #8193D9; }
 }
 .pm-xchip .pm-cb { width: 14px; height: 14px; }
 .pm-empty { color: var(--cx-muted); text-align: center; padding: 24px; }
+
+/* Меню «Скачать» в отчёте ДДС */
+.pk-dl { position: relative; display: inline-block; }
+.pk-dl-arrow { margin-left: 4px; font-size: 11px; }
+.pk-dl-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; min-width: 300px;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: var(--cx-r, 8px);
+    box-shadow: 0 12px 28px -12px rgba(15, 23, 42, .35); padding: 4px;
+}
+.pk-dl-menu a { display: flex; flex-direction: column; gap: 1px; padding: 8px 12px; border-radius: 6px; color: #111827; text-decoration: none; }
+.pk-dl-menu a:hover { background: #f3f4f6; }
+.pk-dl-menu a b { font-weight: 600; font-size: 13px; }
+.pk-dl-menu a span { font-size: 12px; color: #6b7280; }
+.dark .pk-dl-menu { background: #1f2937; border-color: #374151; }
+.dark .pk-dl-menu a { color: #f3f4f6; }
+.dark .pk-dl-menu a:hover { background: #374151; }
+.dark .pk-dl-menu a span { color: #9ca3af; }
