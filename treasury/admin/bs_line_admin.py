@@ -195,7 +195,8 @@ class BSLineAdmin(AppModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        # удалять задвоенные строки может только администратор
+        return request.user.is_superuser
 
     def get_queryset(self, request):
         return (
