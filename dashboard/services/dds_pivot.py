@@ -277,7 +277,7 @@ def _pivot(items: dict) -> str:
 
 def _pivot_sheet() -> str:
     return (HEAD + f'<worksheet {NS} {NS_R}><sheetViews><sheetView showGridLines="0" tabSelected="1" workbookViewId="0"/>'
-            '</sheetViews><cols><col min="1" max="1" width="60" customWidth="1"/>'
+            '</sheetViews><sheetFormatPr defaultRowHeight="16"/><cols><col min="1" max="1" width="60" customWidth="1"/>'
             '<col min="2" max="80" width="15" customWidth="1"/></cols><sheetData/></worksheet>')
 
 
@@ -329,8 +329,8 @@ def _table_style(name: str, pivot: bool, elements) -> str:
 
 STYLES = (HEAD + f'<styleSheet {NS}>'
           f'<numFmts count="1"><numFmt numFmtId="{AMOUNT_FMT}" formatCode="#,##0;(#,##0);&quot;–&quot;"/></numFmts>'
-          '<fonts count="2"><font><sz val="11"/><name val="Aptos Narrow"/><family val="2"/></font>'
-          '<font><b/><sz val="11"/><name val="Aptos Narrow"/><family val="2"/></font></fonts>'
+          '<fonts count="2"><font><sz val="11"/><name val="Aptos Narrow"/><family val="2"/><scheme val="minor"/></font>'
+          '<font><b/><sz val="11"/><name val="Aptos Narrow"/><family val="2"/><scheme val="minor"/></font></fonts>'
           '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
           '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
           '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
@@ -355,6 +355,7 @@ CONTENT_TYPES = (
     f'<Override PartName="/xl/tables/table1.xml" ContentType="{CT}.table+xml"/>'
     f'<Override PartName="/xl/pivotTables/pivotTable1.xml" ContentType="{CT}.pivotTable+xml"/>'
     f'<Override PartName="/xl/pivotCache/pivotCacheDefinition1.xml" ContentType="{CT}.pivotCacheDefinition+xml"/>'
+    f'<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>'
     f'<Override PartName="/xl/styles.xml" ContentType="{CT}.styles+xml"/>'
     f'<Override PartName="/xl/sharedStrings.xml" ContentType="{CT}.sharedStrings+xml"/>'
     '</Types>')
@@ -363,6 +364,14 @@ WORKBOOK = (HEAD + f'<workbook {NS} {NS_R}><bookViews><workbookView activeTab="0
             '<sheet name="Сводная ДДС" sheetId="1" r:id="rId1"/><sheet name="Данные" sheetId="2" r:id="rId2"/>'
             '</sheets><calcPr calcId="191029"/>'
             '<pivotCaches><pivotCache cacheId="1" r:id="rId5"/></pivotCaches></workbook>')
+
+
+def _theme() -> str:
+    """Тема Office со шрифтами Aptos: без темы Excel рисует кнопки сводной мелкими."""
+    from openpyxl.writer.theme import theme_xml
+
+    return (theme_xml.replace('<a:latin typeface="Cambria"/>', '<a:latin typeface="Aptos Display"/>')
+            .replace('<a:latin typeface="Calibri"/>', '<a:latin typeface="Aptos Narrow"/>'))
 
 
 def build(rows) -> bytes:
@@ -388,8 +397,10 @@ def build(rows) -> bytes:
             ("rId3", "styles", "styles.xml"),
             ("rId4", "sharedStrings", "sharedStrings.xml"),
             ("rId5", "pivotCacheDefinition", "pivotCache/pivotCacheDefinition1.xml"),
+            ("rId6", "theme", "theme/theme1.xml"),
         ]))
         z.writestr("xl/styles.xml", STYLES)
+        z.writestr("xl/theme/theme1.xml", _theme())
         z.writestr("xl/worksheets/sheet1.xml", _pivot_sheet())
         z.writestr("xl/worksheets/_rels/sheet1.xml.rels", _rels([("rId1", "pivotTable", "../pivotTables/pivotTable1.xml")]))
         z.writestr("xl/pivotTables/pivotTable1.xml", _pivot(items))
