@@ -17,6 +17,15 @@ from django.urls import reverse
 
 @admin.register(Jobs)
 class JobsAdmin(ModelAdmin):
+
+    def changelist_view(self, request, extra_context=None):
+        try:                                   # касса: строки, пропавшие из выгрузки 1С
+            from treasury.admin.cash_line_admin import not_in_1c_hint
+
+            not_in_1c_hint(request)
+        except Exception:                      # предупреждение не мешает списку команд
+            pass
+        return super().changelist_view(request, extra_context)
     
     list_display = [
         "name",

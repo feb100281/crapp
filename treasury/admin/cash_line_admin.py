@@ -70,6 +70,45 @@ class CashLineAllocInline(AppTabularInline):
     verbose_name_plural = "Разноска"
 
 
+def _diff_html(diffs) -> str:
+    return format_html_join("; ", "{}: «{}» → «{}»", diffs)
+
+
+def not_in_1c_hint(request) -> None:
+    """Предупреждение на экранах: что исправили или удалили в 1С с прошлой выгрузки — было → стало."""
+    from django.contrib import messages
+
+    from ..services.cash_lines import changes_in_1c
+
+    if request.GET.get("in_1c__exact") == "0":
+        return
+    changes = changes_in_1c()
+    if not changes:
+        return
+    edited = [c for c in changes if c["new"]]
+    deleted = [c for c in changes if not c["new"]]
+    url = reverse("admin:treasury_cashline_changelist") + "?in_1c__exact=0"
+    head = []
+    if edited:
+        head.append(f"исправлено {len(edited)}")
+    if deleted:
+        head.append(f"удалено {len(deleted)}")
+    items = format_html_join("", "<li><b>{} от {}</b>, {} ₽ — {}</li>", (
+        (c["old"].doc_number, f"{c['old'].date:%d.%m.%Y}", f"{c['old'].amount:,.0f}".replace(",", "\u00a0"),
+         _diff_html(c["diffs"]) if c["new"] and c["diffs"] else
+         ("без изменений в полях карточки" if c["new"] else "удалён в 1С"))
+        for c in changes[:5]))
+    more = format_html(" … и ещё {}", len(changes) - 5) if len(changes) > 5 else ""
+    # свёрнуто по умолчанию: строка-заголовок, список по клику
+    messages.warning(request, format_html(
+        '<details class="cx-changes"><summary style="cursor:pointer">'
+        "Касса: с прошлой выгрузки 1С {}. Старые версии в ДДС не входят. "
+        '<span style="text-decoration:underline">Показать</span></summary>'
+        '<ul style="margin:6px 0 0 18px;list-style:disc">{}</ul>{} '
+        '<a href="{}" class="pk-cf-link">Все изменения →</a></details>',
+        ", ".join(head), items, more, url))
+
+
 @admin.register(CashLine)
 class CashLineAdmin(AppModelAdmin):
     list_display = [
@@ -100,6 +139,27 @@ class CashLineAdmin(AppModelAdmin):
     ]
 
     inlines = [CashLineAllocInline]
+
+    def changelist_view(self, request, extra_context=None):
+        not_in_1c_hint(request)
+        return super().changelist_view(request, extra_context)
+
+    def get_list_display(self, request):
+        cols = list(super().get_list_display(request))
+        if request.GET.get("in_1c__exact") == "0":          # отбор «нет в 1С» — что изменилось
+            cols.insert(cols.index("amount") + 1, "change_display")
+        return cols
+
+    @display(description="Что изменилось в 1С")
+    def change_display(self, obj):
+        from ..services.cash_lines import line_changes
+
+        ch = line_changes(obj)
+        if not ch["new"]:
+            return Badge("удалён в 1С", None, "danger").badge
+        if not ch["diffs"]:
+            return "без изменений в полях карточки"
+        return format_html_join("", '<div class="pk-mini-note">{}: <s>{}</s> → <b>{}</b></div>', ch["diffs"])
 
     fieldsets = (
         ("Операция", {"fields": (

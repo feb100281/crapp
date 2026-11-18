@@ -238,3 +238,58 @@ def cash_bank_days(year: int | None = None, problems_only: bool = False) -> dict
         "rows": rows, "accounts": accounts, "years": years, "coverage_end": coverage_end,
         "stmt_end": stmt_end, "totals": totals, "in_transit": cum,
     }
+
+
+# ------------------------------------------------------------------ исправления в 1С
+
+CHANGE_FIELDS = (
+    ("amount", "сумма"), ("corr_account", "корр. счёт"), ("counterparty", "контрагент"),
+    ("cf_item_1c", "статья 1С"), ("subconto2", "договор"), ("subconto3", "документ расчётов"),
+    ("doc_comment", "основание"), ("doc_datetime", "время документа"),
+)
+
+
+def _val(line: CashLine, field: str) -> str:
+    v = getattr(line, field)
+    if field == "amount":
+        return f"{v:,.2f}".replace(",", " ").replace(".", ",")
+    if field == "doc_datetime":
+        return f"{v:%d.%m.%Y %H:%M}" if v else ""
+    v = (v or "").strip()
+    return "" if v == "<...>" else v            # «<...>» в 1С — то же, что пусто
+
+
+def line_changes(old: CashLine, candidates: list[CashLine] | None = None) -> dict:
+    """
+    Строка, которой нет в последней выгрузке 1С: нашлась ли её новая версия
+    (тот же документ и дата) и что в ней поменялось.
+    → {"new": CashLine | None, "diffs": [(поле, было, стало)]}
+    """
+    if candidates is None:
+        candidates = list(CashLine.objects.filter(
+            in_1c=True, cash_account=old.cash_account, date=old.date, doc_type=old.doc_type,
+            doc_number=old.doc_number, direction=old.direction))
+    best, best_diffs = None, None
+    for new in candidates:
+        diffs = [(label, _val(old, f), _val(new, f)) for f, label in CHANGE_FIELDS
+                 if _val(old, f) != _val(new, f)]
+        if best_diffs is None or len(diffs) < len(best_diffs):
+            best, best_diffs = new, diffs
+    return {"new": best, "diffs": best_diffs or []}
+
+
+def changes_in_1c() -> list[dict]:
+    """Все строки «нет в 1С» с их новыми версиями: исправлено (что было → что стало) или удалено."""
+    gone = list(CashLine.objects.filter(in_1c=False).order_by("date", "doc_number"))
+    if not gone:
+        return []
+    pool: dict[tuple, list[CashLine]] = defaultdict(list)
+    for ln in CashLine.objects.filter(in_1c=True, date__in={g.date for g in gone},
+                                      doc_number__in={g.doc_number for g in gone}):
+        pool[(ln.cash_account, ln.date, ln.doc_type, ln.doc_number, ln.direction)].append(ln)
+    out = []
+    for old in gone:
+        ch = line_changes(old, pool.get((old.cash_account, old.date, old.doc_type, old.doc_number,
+                                         old.direction), []))
+        out.append({"old": old, **ch})
+    return out

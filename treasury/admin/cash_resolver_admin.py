@@ -66,6 +66,12 @@ class CashResolverAdmin(AppModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related("rules__cf_item")
 
+    def changelist_view(self, request, extra_context=None):
+        from .cash_line_admin import not_in_1c_hint
+
+        not_in_1c_hint(request)
+        return super().changelist_view(request, extra_context)
+
     def has_add_permission(self, request):
         return False
 
