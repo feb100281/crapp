@@ -258,9 +258,9 @@ def _pivot(items: dict) -> str:
     top = len(PAGE_FIELDS) + 2
     return (HEAD + f'<pivotTableDefinition {NS} name="СводнаяДДС" cacheId="1" applyNumberFormats="0" '
             'applyBorderFormats="0" applyFontFormats="0" applyPatternFormats="0" applyAlignmentFormats="0" '
-            'applyWidthHeightFormats="1" dataCaption="Значения" updatedVersion="6" minRefreshableVersion="3" '
+            'applyWidthHeightFormats="1" dataCaption="Значения" grandTotalCaption="ИТОГО" updatedVersion="6" minRefreshableVersion="3" '
             'useAutoFormatting="1" itemPrintTitles="1" createdVersion="6" indent="0" outline="1" outlineData="1" '
-            'multipleFieldFilters="0" rowHeaderCaption="Статья" colHeaderCaption="Период">'
+            'multipleFieldFilters="0" rowHeaderCaption=" " colHeaderCaption=" ">'
             f'<location ref="A{top}:B{top + 2}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1" '
             f'rowPageCount="{len(PAGE_FIELDS)}" colPageCount="1"/>'
             f'<pivotFields count="{len(FIELDS)}">{"".join(pf)}</pivotFields>'
@@ -269,14 +269,14 @@ def _pivot(items: dict) -> str:
             f'<colFields count="{len(COL_FIELDS)}">{cols}</colFields>'
             '<colItems count="1"><i t="grand"><x/></i></colItems>'
             f'<pageFields count="{len(PAGE_FIELDS)}">{pages}</pageFields>'
-            f'<dataFields count="1"><dataField name="Сумма, ₽ " fld="{DATA_FIELD}" baseField="0" baseItem="0" '
+            f'<dataFields count="1"><dataField name="в российских рублях (RUB)" fld="{DATA_FIELD}" baseField="0" baseItem="0" '
             f'numFmtId="{AMOUNT_FMT}"/></dataFields>'
             '<pivotTableStyleInfo name="CosmoPivot" showRowHeaders="1" showColHeaders="1" '
             'showRowStripes="0" showColStripes="0" showLastColumn="1"/></pivotTableDefinition>')
 
 
 def _pivot_sheet() -> str:
-    return (HEAD + f'<worksheet {NS} {NS_R}><sheetViews><sheetView tabSelected="1" workbookViewId="0"/>'
+    return (HEAD + f'<worksheet {NS} {NS_R}><sheetViews><sheetView showGridLines="0" tabSelected="1" workbookViewId="0"/>'
             '</sheetViews><cols><col min="1" max="1" width="60" customWidth="1"/>'
             '<col min="2" max="80" width="15" customWidth="1"/></cols><sheetData/></worksheet>')
 
@@ -286,29 +286,34 @@ GREEN, GREEN_2, GREEN_3 = "2F6656", "3D7A67", "1F5E4E"
 LIGHT, LIGHT_2, ZEBRA, LINE = "E7F1ED", "F3F8F6", "F7F7F7", "D9D9D9"
 
 
-def _dxf(fill=None, color=None, bold=False, top=None, bottom=None) -> str:
+def _dxf(fill=None, color=None, bold=False, **borders) -> str:
+    """borders: сторона=(стиль, цвет), стороны — left/right/top/bottom/vertical/horizontal."""
     font = ""
     if bold or color:
         font = "<font>" + ("<b/>" if bold else "") + (f'<color rgb="FF{color}"/>' if color else "") + "</font>"
     fill_xml = (f'<fill><patternFill patternType="solid"><fgColor rgb="FF{fill}"/>'
                 f'<bgColor rgb="FF{fill}"/></patternFill></fill>') if fill else ""
     border = ""
-    if top or bottom:
-        border = ("<border>" + (f'<top style="thin"><color rgb="FF{top}"/></top>' if top else "")
-                  + (f'<bottom style="thin"><color rgb="FF{bottom}"/></bottom>' if bottom else "") + "</border>")
+    if borders:
+        border = "<border>" + "".join(
+            f'<{side} style="{borders[side][0]}"><color rgb="FF{borders[side][1]}"/></{side}>'
+            for side in ("left", "right", "top", "bottom", "vertical", "horizontal") if side in borders) + "</border>"
     return f"<dxf>{font}{fill_xml}{border}</dxf>"
 
 
+GRID = ("thin", LINE)
 DXFS = [
-    _dxf(bottom=LINE),                                   # 0 вся таблица — тонкие линии
-    _dxf(fill=GREEN, color="FFFFFF", bold=True),         # 1 шапка
-    _dxf(fill=GREEN_3, color="FFFFFF", bold=True),       # 2 общий итог
-    _dxf(fill=GREEN_2, color="FFFFFF", bold=True),       # 3 деятельность
-    _dxf(fill=LIGHT, color=GREEN_3, bold=True),          # 4 направление
-    _dxf(fill=LIGHT_2, bold=True),                       # 5 статья
-    _dxf(color=GREEN, bold=True),                        # 6 подписи фильтров
-    _dxf(fill=LIGHT_2, color=GREEN_3, bold=True, bottom=GREEN),  # 7 значения фильтров
-    _dxf(fill=ZEBRA),                                    # 8 полоса таблицы данных
+    _dxf(left=GRID, right=GRID, vertical=GRID, bottom=GRID, horizontal=("thin", "EDEDED")),  # 0 сетка
+    _dxf(fill=GREEN, color="FFFFFF", bold=True, vertical=("thin", "FFFFFF"),
+         horizontal=("thin", "FFFFFF")),                                                   # 1 шапка
+    _dxf(fill=LIGHT, color=GREEN_3, bold=True, top=("medium", GREEN_3),
+         bottom=("double", GREEN_3)),                                                      # 2 ИТОГО
+    _dxf(fill=LIGHT, color=GREEN_3, bold=True, top=("thin", GREEN)),                        # 3 деятельность
+    _dxf(fill=LIGHT_2),                                                                    # 4 направление
+    _dxf(),                                                                                # 5 статья
+    _dxf(color=GREEN_3, bold=True),                                                        # 6 подписи фильтров
+    _dxf(fill=LIGHT_2, color=GREEN_3, bold=True, bottom=("thin", GREEN)),                   # 7 значения фильтров
+    _dxf(fill=ZEBRA),                                                                      # 8 полоса данных
 ]
 PIVOT_STYLE = [("wholeTable", 0), ("headerRow", 1), ("firstHeaderCell", 1), ("totalRow", 2),
                ("firstRowSubheading", 3), ("secondRowSubheading", 4), ("thirdRowSubheading", 5),
@@ -324,8 +329,8 @@ def _table_style(name: str, pivot: bool, elements) -> str:
 
 STYLES = (HEAD + f'<styleSheet {NS}>'
           f'<numFmts count="1"><numFmt numFmtId="{AMOUNT_FMT}" formatCode="#,##0;(#,##0);&quot;–&quot;"/></numFmts>'
-          '<fonts count="2"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font>'
-          '<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>'
+          '<fonts count="2"><font><sz val="11"/><name val="Aptos Narrow"/><family val="2"/></font>'
+          '<font><b/><sz val="11"/><name val="Aptos Narrow"/><family val="2"/></font></fonts>'
           '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
           '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
           '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
