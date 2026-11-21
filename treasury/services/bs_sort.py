@@ -299,6 +299,7 @@ def sort_folder(root: Path, known: dict[str, str], apply: bool = True, log=print
     periods: dict[tuple[Path, str], tuple[date, date]] = {}
     taken: dict[Path, str] = {}
     rows = []
+    vacated: set[Path] = set()
 
     for path in files:
         rel = path.relative_to(root)
@@ -341,6 +342,7 @@ def sort_folder(root: Path, known: dict[str, str], apply: bool = True, log=print
         if apply:
             make_dirs(root, target.parent)
             path.rename(target)
+            vacated.add(path.parent)
 
     if apply:
         if rows:
@@ -352,25 +354,35 @@ def sort_folder(root: Path, known: dict[str, str], apply: bool = True, log=print
                     w.writerow(["когда", "было", "стало", "почему"])
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
                 w.writerows([now, *r] for r in rows)
-        stats["empty_dirs"] = remove_empty(root)
+        stats["empty_dirs"] = remove_empty(root, vacated)
     log(f"Файлов: {stats['files']}, уже на месте: {stats['in_place']}, разложено: {stats['moved']}, "
         f"дублей: {stats['dups']}, не разобрано: {stats['unknown']}"
         + ("" if apply else "  — пробный прогон, файлы не перемещались"))
     return stats
 
 
-def remove_empty(root: Path) -> int:
-    """Пустые папки после раскладки (служебные .DS_Store не в счёт)."""
+def remove_empty(root: Path, vacated: set[Path]) -> int:
+    """
+    Удаляет только папки, из которых раскладка сама унесла файлы, и их опустевших
+    родителей. Остальные папки не трогает: в облачной папке (Nextcloud) ещё не
+    скачанная папка выглядит пустой, и её удаление стирает файлы на сервере.
+    """
+    root = Path(root)
     keep = {root, root / PDF_DIR, root / PDF_DIR / PDF_OUT}
+    dirs: set[Path] = set()
+    for d in vacated:
+        while d != root and root in d.parents:
+            dirs.add(d)
+            d = d.parent
     removed = 0
-    for d in sorted((p for p in root.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
-        if d in keep:
+    for d in sorted(dirs, key=lambda p: len(p.parts), reverse=True):
+        if d in keep or not d.is_dir():
             continue
-        rest = [c for c in d.iterdir() if c.name != ".DS_Store"]
-        if rest:
+        children = list(d.iterdir())
+        if any(c.name != ".DS_Store" for c in children):
             continue
         try:
-            for c in d.iterdir():
+            for c in children:
                 c.unlink()
             d.rmdir()
             removed += 1
