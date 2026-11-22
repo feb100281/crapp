@@ -209,6 +209,7 @@ TELEGRAM_ADMIN_IDS=123456789               # ваш Telegram ID (узнать: @
 TELEGRAM_WEBAPP_URL=https://ваш-домен      # необязательно: Mini App работает только по https
 TELEGRAM_INVITE_HOURS=24                   # сколько живёт приглашение
 TELEGRAM_PROXY=socks5://host:port          # необязательно: если api.telegram.org закрыт провайдером
+TELEGRAM_TUNNEL=root@host                  # необязательно: бот сам поднимет ssh -D до этого сервера (вход по ключу)
 ```
 
 **3. PDF.** Один раз: `pip install -r requirements.txt && playwright install chromium`.

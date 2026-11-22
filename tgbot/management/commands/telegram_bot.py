@@ -10,7 +10,7 @@ from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 
 from dashboard.services import fx_feed
-from tgbot import conf
+from tgbot import conf, tunnel
 from tgbot.api import Bot, TelegramError, TelegramUnreachable
 from tgbot.handlers import BotApp
 
@@ -20,6 +20,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+        try:
+            tunnel.ensure()
+        except RuntimeError as exc:
+            self.stderr.write(f"Туннель: {exc}")
+            return
         bot = Bot(conf.token())
         app = BotApp(bot)
         try:
@@ -30,6 +35,7 @@ class Command(BaseCommand):
                 "Скорее всего, его блокирует провайдер. Варианты:\n"
                 "  • включите VPN и запустите снова;\n"
                 "  • укажите прокси в .env: TELEGRAM_PROXY=http://host:port (или socks5://host:port);\n"
+                "  • или туннель через свой сервер: TELEGRAM_TUNNEL=root@host (см. tgbot/tunnel.py);\n"
                 "  • запускайте бота на сервере, где Telegram доступен.\n"
                 "Проверка: curl -m 10 https://api.telegram.org"
             )
@@ -66,11 +72,18 @@ class Command(BaseCommand):
         while True:
             fx_feed.maybe_update()          # курсы ЦБ: сразу и дальше раз в пару часов
             try:
+                tunnel.ensure()             # туннель упал — поднимаем заново
+            except RuntimeError as exc:
+                logging.warning("туннель: %s — повтор через 30 с", exc)
+                time.sleep(30)
+                continue
+            try:
                 for upd in bot.updates(offset):
                     offset = upd["update_id"] + 1
                     close_old_connections()
                     app.handle(upd)
             except KeyboardInterrupt:
+                tunnel.stop()
                 self.stdout.write("Остановлен")
                 return
             except (requests.RequestException, TelegramError) as exc:
