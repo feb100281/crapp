@@ -25,6 +25,12 @@ class JobsAdmin(ModelAdmin):
             not_in_1c_hint(request)
         except Exception:                      # предупреждение не мешает списку команд
             pass
+        try:                                   # выписки: что не разложилось / не загрузилось
+            from .bs_hint import statements_hint
+
+            statements_hint(request)
+        except Exception:
+            pass
         return super().changelist_view(request, extra_context)
     
     list_display = [

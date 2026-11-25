@@ -287,6 +287,50 @@ def _skip(rel: Path) -> bool:
             or parts[:2] == (PDF_DIR, PDF_OUT) or _placed(parts))
 
 
+def _sort_one(root, path, known, apply, log, stats, periods, taken, rows, vacated) -> None:
+    rel = path.relative_to(root)
+    info = identify(path, rel, known)
+    if info.account and info.d1 and path.suffix.lower() == ".txt":
+        periods[(path.parent, info.account)] = (info.d1, info.d2)
+    elif info.account and not info.d1 and (path.parent, info.account) in periods:
+        info.d1, info.d2 = periods[(path.parent, info.account)]
+    target = target_for(root, path, info)
+    digest = sha1(path)
+    if target == path:
+        stats["in_place"] += 1
+        taken[target] = digest
+        return
+
+    reason = "раскладка" + (f" ({info.note})" if info.note else "")
+    stem, ext, n = target.stem, target.suffix, 2
+    while True:
+        owner = taken.get(target) or (sha1(target) if target.exists() else None)
+        if owner is None:
+            break
+        if owner == digest:                            # точная копия уже лежит на месте
+            reason = "дубль: " + str(target.relative_to(root))
+            target, k = root / DUPS / rel, 2
+            while target.exists() or target in taken:
+                target = (root / DUPS / rel).with_name(f"{rel.stem} ({k}){rel.suffix}")
+                k += 1
+            break
+        target = target.with_name(f"{stem} ({n}){ext}")
+        n += 1
+    taken[target] = digest
+    if target.parts[len(root.parts)] == DUPS:
+        stats["dups"] += 1
+    elif target.parts[len(root.parts)] == UNKNOWN:
+        stats["unknown"] += 1
+    else:
+        stats["moved"] += 1
+    rows.append((str(rel), str(target.relative_to(root)), reason))
+    log(f"  {rel}  →  {target.relative_to(root)}" + ("" if reason == "раскладка" else f"   [{reason}]"))
+    if apply:
+        make_dirs(root, target.parent)
+        path.rename(target)
+        vacated.add(path.parent)
+
+
 def sort_folder(root: Path, known: dict[str, str], apply: bool = True, log=print) -> dict:
     """known — номер счёта → название банка. apply=False — только показать план."""
     root = Path(root)
@@ -302,47 +346,12 @@ def sort_folder(root: Path, known: dict[str, str], apply: bool = True, log=print
     vacated: set[Path] = set()
 
     for path in files:
-        rel = path.relative_to(root)
-        info = identify(path, rel, known)
-        if info.account and info.d1 and path.suffix.lower() == ".txt":
-            periods[(path.parent, info.account)] = (info.d1, info.d2)
-        elif info.account and not info.d1 and (path.parent, info.account) in periods:
-            info.d1, info.d2 = periods[(path.parent, info.account)]
-        target = target_for(root, path, info)
-        digest = sha1(path)
-        if target == path:
-            stats["in_place"] += 1
-            taken[target] = digest
-            continue
+        try:
+            _sort_one(root, path, known, apply, log, stats, periods, taken, rows, vacated)
+        except OSError as exc:                  # файл не скачан из облака и т.п. — идём дальше
+            stats["skipped"] = stats.get("skipped", 0) + 1
+            log(f"  ! {path.relative_to(root)}: пропущен ({exc.strerror or exc}) — разложится при следующем запуске")
 
-        reason = "раскладка" + (f" ({info.note})" if info.note else "")
-        stem, ext, n = target.stem, target.suffix, 2
-        while True:
-            owner = taken.get(target) or (sha1(target) if target.exists() else None)
-            if owner is None:
-                break
-            if owner == digest:                            # точная копия уже лежит на месте
-                reason = "дубль: " + str(target.relative_to(root))
-                target, k = root / DUPS / rel, 2
-                while target.exists() or target in taken:
-                    target = (root / DUPS / rel).with_name(f"{rel.stem} ({k}){rel.suffix}")
-                    k += 1
-                break
-            target = target.with_name(f"{stem} ({n}){ext}")
-            n += 1
-        taken[target] = digest
-        if target.parts[len(root.parts)] == DUPS:
-            stats["dups"] += 1
-        elif target.parts[len(root.parts)] == UNKNOWN:
-            stats["unknown"] += 1
-        else:
-            stats["moved"] += 1
-        rows.append((str(rel), str(target.relative_to(root)), reason))
-        log(f"  {rel}  →  {target.relative_to(root)}" + ("" if reason == "раскладка" else f"   [{reason}]"))
-        if apply:
-            make_dirs(root, target.parent)
-            path.rename(target)
-            vacated.add(path.parent)
 
     if apply:
         if rows:
@@ -357,6 +366,7 @@ def sort_folder(root: Path, known: dict[str, str], apply: bool = True, log=print
         stats["empty_dirs"] = remove_empty(root, vacated)
     log(f"Файлов: {stats['files']}, уже на месте: {stats['in_place']}, разложено: {stats['moved']}, "
         f"дублей: {stats['dups']}, не разобрано: {stats['unknown']}"
+        + (f", пропущено (не скачаны): {stats['skipped']}" if stats.get("skipped") else "")
         + ("" if apply else "  — пробный прогон, файлы не перемещались"))
     return stats
 
@@ -427,8 +437,12 @@ def backup_folder(src: Path, dst: Path, log=print) -> dict:
                 stats["same"] += 1
                 continue
             stats["renamed"] += 1
-        make_dirs(dst, target.parent)
-        shutil.copy2(path, target)
+        try:
+            make_dirs(dst, target.parent)
+            shutil.copy2(path, target)
+        except OSError as exc:                  # не скачан из облака — скопируется в следующий раз
+            log(f"  ! резерв: {rel} пропущен ({exc.strerror or exc})")
+            continue
         stats["copied"] += 1
         log(f"  → резерв: {rel}" + ("" if target.name == rel.name else f"  (как {target.name})"))
     log(f"Резервная копия: скопировано {stats['copied']} (из них под новым именем {stats['renamed']}), "
