@@ -38,6 +38,23 @@ CREATE OR REPLACE TEMP TABLE statements AS
         GROUP BY file_hash, ba_number
     ),
 
+    -- Банк иногда выгружает выписку без остатков (Альфа): берём остаток на начало
+    -- из предыдущей выписки счёта, на конец = начало + поступления - списания
+    filled AS (
+        SELECT
+            a.* EXCLUDE (bb, eb),
+            coalesce(a.bb, p.prev_eb) AS bb,
+            coalesce(a.eb, coalesce(a.bb, p.prev_eb) + coalesce(a.dt, 0) - coalesce(a.cr, 0)) AS eb
+        FROM agg a
+        LEFT JOIN LATERAL (
+            SELECT arg_max(b.eb, b.date_to) AS prev_eb
+            FROM agg b
+            WHERE b.ba_number = a.ba_number
+              AND b.date_to < a.date_from
+              AND b.eb IS NOT NULL
+        ) p ON TRUE
+    ),
+
     hashed AS (
         SELECT
             *,
@@ -52,7 +69,7 @@ CREATE OR REPLACE TEMP TABLE statements AS
                 coalesce(dt::TEXT, '')        || '|' ||
                 coalesce(cr::TEXT, '')
             ) AS sid
-        FROM agg
+        FROM filled
     )
 
     SELECT *

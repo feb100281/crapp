@@ -437,10 +437,13 @@ def backup_folder(src: Path, dst: Path, log=print) -> dict:
                 stats["same"] += 1
                 continue
             stats["renamed"] += 1
+        part = target.with_name(f".{target.name}.part")   # копия появляется только целиком
         try:
             make_dirs(dst, target.parent)
-            shutil.copy2(path, target)
+            shutil.copy2(path, part)
+            part.rename(target)
         except OSError as exc:                  # не скачан из облака — скопируется в следующий раз
+            part.unlink(missing_ok=True)
             log(f"  ! резерв: {rel} пропущен ({exc.strerror or exc})")
             continue
         stats["copied"] += 1
